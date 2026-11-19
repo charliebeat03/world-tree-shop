@@ -60,10 +60,18 @@
 .admin-filters{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .admin-filters input,.admin-filters select{border:1px solid #deddd5;border-radius:9px;padding:9px 11px;font:11px 'DM Sans',sans-serif;background:#fff;min-width:0}
 .admin-filters label{font-size:10px;font-weight:700;color:#6b7585;white-space:nowrap}
-.admin-card h2{color:#e9c568!important}
-.admin-card h2>*{color:#e9c568!important}
+.admin-card h2,.admin-section-title h2{color:#102342!important}
+.admin-card h2>*{color:#b18a32!important}
+.admin-section-title p{color:#596579!important;font-size:12px;font-weight:500;margin:6px 0 0}
 .admin-top h1{color:#fff!important;font-size:22px;margin:0}
-.admin-top{background:rgba(0,0,0,.2);border-radius:12px;padding:14px 18px;margin-bottom:16px;backdrop-filter:blur(6px)}
+.admin-top{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:14px 18px;margin-bottom:16px;backdrop-filter:blur(6px)}
+.admin-top p{color:#f0f3f8!important;font-size:13px;font-weight:500;line-height:1.5;max-width:360px}
+.admin-top .eyebrow{color:#f2d58a!important;font-weight:700;letter-spacing:.12em}
+.admin-quick-nav{max-width:1050px;margin:0 auto 18px;padding:13px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e4e7ed;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.admin-quick-nav span{font-size:12px;font-weight:700;color:#344258;margin-right:4px}
+.admin-quick-nav a{display:inline-flex;align-items:center;justify-content:center;padding:9px 13px;border-radius:9px;background:#f2f5f9;color:#102342;text-decoration:none;font-size:12px;font-weight:700;border:1px solid #dce2eb;transition:background .15s ease,color .15s ease}
+.admin-quick-nav a:hover,.admin-quick-nav a:focus-visible{background:#102342;color:#fff;outline:2px solid #c5a04b;outline-offset:2px}
+.admin-dashboard section[id]{scroll-margin-top:18px}
 button.added{animation:addedPulse 0.4s ease-out;transform:scale(1.05);background:#e9c568!important;color:#07152e!important;border-color:#e9c568!important}
 @keyframes addedPulse{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1.05)}}
 
@@ -86,3 +94,5 @@ button.added{animation:addedPulse 0.4s ease-out;transform:scale(1.05);background
 .drawer button,.drawer input,.drawer select,.drawer textarea{touch-action:manipulation}
 .product-image>img{display:block;width:100%;height:100%;object-fit:contain}
 @media(max-width:480px){.drawer{width:100%;padding:calc(19px + env(safe-area-inset-top)) 19px calc(19px + env(safe-area-inset-bottom))}.overlay{justify-content:stretch}}
+
+@media(max-width:600px){.admin-quick-nav{gap:8px;padding:12px}.admin-quick-nav span{width:100%;margin:0 0 2px}.admin-quick-nav a{flex:1 1 auto;text-align:center;padding:10px 9px}.admin-top p{max-width:none;margin:0}}
