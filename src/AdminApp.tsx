@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase, supabaseConfigured } from './lib_supabase'
-import { ArrowLeft, LogOut, PackagePlus, RefreshCw, ShieldCheck, Pencil, Trash2, ImagePlus, MapPin, Tags, X } from 'lucide-react'
+import { ArrowLeft, LogOut, PackagePlus, RefreshCw, ShieldCheck, Pencil, Trash2, ImagePlus, MapPin, Tags, X, Plus } from 'lucide-react'
 
 type ProductRow = { id:string; name:string; slug:string; description:string; status:string; category_id:string }
 type CategoryRow = { id:string; name:string }
@@ -28,33 +28,26 @@ export default function AdminApp() {
   const [options,setOptions] = useState<PriceOption[]>([])
   const [provinces,setProvinces] = useState<Province[]>([])
   const [municipalities,setMunicipalities] = useState<Municipality[]>([])
-  const [editing,setEditing] = useState<string|null>(null)
-  const [name,setName] = useState('')
-  const [slug,setSlug] = useState('')
-  const [categoryId,setCategoryId] = useState('')
-  const [description,setDescription] = useState('')
-  const [status,setStatus] = useState('check_availability')
-  const [prices,setPrices] = useState<Record<string,string>>({})
-  const [imageFile,setImageFile] = useState<File|null>(null)
-  const [newCategory,setNewCategory] = useState('')
-  const [editingCategory,setEditingCategory] = useState<string|null>(null)
-  const [editingCategoryName,setEditingCategoryName] = useState('')
-  const [newProvince,setNewProvince] = useState('')
-  const [newMunicipality,setNewMunicipality] = useState('')
-  const [selectedProvince,setSelectedProvince] = useState('')
-  const [combos,setCombos] = useState<any[]>([])
-  const [comboEditing,setComboEditing] = useState<string|null>(null)
-  const [comboName,setComboName] = useState('')
-  const [comboSlug,setComboSlug] = useState('')
-  const [comboDescription,setComboDescription] = useState('')
-  const [comboStatus,setComboStatus] = useState('available')
-  const [comboPrices,setComboPrices] = useState<Record<string,string>>({})
-  const [comboItems,setComboItems] = useState<Record<string,string>>({})
-  const [comboImage,setComboImage] = useState<File|null>(null)
-  const [promoStart,setPromoStart] = useState('')
-  const [promoEnd,setPromoEnd] = useState('')
   const [productFilter,setProductFilter] = useState('')
   const [comboFilter,setComboFilter] = useState('')
+  const [combos,setCombos] = useState<any[]>([])
+  const [name,setName] = useState(''); const [slug,setSlug] = useState(''); const [categoryId,setCategoryId] = useState('')
+  const [description,setDescription] = useState(''); const [status,setStatus] = useState('check_availability')
+  const [prices,setPrices] = useState<Record<string,string>>({}); const [imageFile,setImageFile] = useState<File|null>(null); const [editing,setEditing] = useState<string|null>(null)
+  const [comboEditing,setComboEditing] = useState<string|null>(null); const [comboName,setComboName] = useState(''); const [comboSlug,setComboSlug] = useState('')
+  const [comboDescription,setComboDescription] = useState(''); const [comboStatus,setComboStatus] = useState('available')
+  const [comboPrices,setComboPrices] = useState<Record<string,string>>({}); const [comboItems,setComboItems] = useState<Record<string,string>>({})
+  const [comboImage,setComboImage] = useState<File|null>(null); const [promoStart,setPromoStart] = useState(''); const [promoEnd,setPromoEnd] = useState('')
+  const [newCategory,setNewCategory] = useState(''); const [editingCategory,setEditingCategory] = useState<string|null>(null); const [editingCategoryName,setEditingCategoryName] = useState('')
+  const [newProvince,setNewProvince] = useState(''); const [newMunicipality,setNewMunicipality] = useState(''); const [selectedProvince,setSelectedProvince] = useState('')
+  const [showZonesModal,setShowZonesModal] = useState(false)
+
+  // Modal states
+  const [showProductModal,setShowProductModal] = useState(false)
+
+  const [showComboModal,setShowComboModal] = useState(false)
+
+  const [showCategoryModal,setShowCategoryModal] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!supabase) return
@@ -116,7 +109,7 @@ export default function AdminApp() {
 
   function resetForm() {
     setEditing(null); setName(''); setSlug(''); setDescription('')
-    setStatus('check_availability'); setPrices(emptyPrice(options)); setImageFile(null)
+    setStatus('check_availability'); setPrices(emptyPrice(options)); setImageFile(null); setShowProductModal(false)
   }
 
   async function editProduct(product:ProductRow) {
@@ -129,7 +122,7 @@ export default function AdminApp() {
     const next = emptyPrice(options)
     for (const row of data || []) next[row.pricing_option_id] = String(row.amount)
     setPrices(next); setImageFile(null); setBusy(false)
-    document.getElementById('product-editor')?.scrollIntoView({behavior:'smooth'})
+    setShowProductModal(true)
   }
 
   async function saveProduct(e:FormEvent) {
@@ -234,7 +227,7 @@ export default function AdminApp() {
   function resetCombo() {
     setComboEditing(null); setComboName(''); setComboSlug(''); setComboDescription('')
     setComboStatus('available'); setComboPrices(emptyPrice(options)); setComboItems({})
-    setComboImage(null); setPromoStart(''); setPromoEnd('')
+    setComboImage(null); setPromoStart(''); setPromoEnd(''); setShowComboModal(false)
   }
 
   async function editCombo(combo:any) {
@@ -255,7 +248,7 @@ export default function AdminApp() {
     setPromoStart(combo.starts_at ? combo.starts_at.slice(0,16) : '')
     setPromoEnd(combo.ends_at ? combo.ends_at.slice(0,16) : '')
     setComboImage(null); setBusy(false)
-    document.getElementById('combo-editor')?.scrollIntoView({behavior:'smooth'})
+    setShowComboModal(true)
   }
 
   async function saveCombo(e:FormEvent) {
@@ -263,7 +256,7 @@ export default function AdminApp() {
     if (!supabase || !comboName.trim()) return
     if (comboImage && comboImage.size > 5 * 1024 * 1024) { setError('La imagen del combo no puede superar 5 MB.'); return }
     if (comboImage && !['image/jpeg','image/png','image/webp'].includes(comboImage.type)) { setError('Formato no válido. Usa JPG, PNG o WebP.'); return }
-    const items = Object.entries(comboItems).filter(([,q])=>q.trim() && Number(q)>0)
+    const items = (Object.entries(comboItems) as [string,string][]).filter(([,q])=>q.trim() && Number(q)>0)
     if (!items.length) { setError('Añade al menos un producto al combo y define su cantidad.'); return }
     if (promoStart && promoEnd && new Date(promoEnd)<=new Date(promoStart)) { setError('La fecha final debe ser posterior a la inicial.'); return }
     setBusy(true); setError(''); setNotice('')
@@ -336,7 +329,7 @@ export default function AdminApp() {
     e.preventDefault()
     if (!supabase || !newProvince.trim()) return
     setBusy(true)
-    const {error:insertError} = await supabase.from('provinces').insert({name:newProvince.trim(),is_enabled:false,sort_order:provinces.length+1})
+    const {error:insertError} = await supabase.from('provinces').insert({name:newProvince.trim(),slug:slugify(newProvince),is_enabled:false,sort_order:provinces.length+1})
     if (insertError) setError(insertError.message)
     else { setNewProvince(''); setNotice('Provincia añadida, inicialmente deshabilitada.'); await refresh() }
     setBusy(false)
@@ -346,9 +339,50 @@ export default function AdminApp() {
     e.preventDefault()
     if (!supabase || !newMunicipality.trim() || !selectedProvince) return
     setBusy(true)
-    const {error:insertError} = await supabase.from('municipalities').insert({province_id:selectedProvince,name:newMunicipality.trim(),is_enabled:false,sort_order:municipalities.filter(m=>m.province_id===selectedProvince).length+1})
+    const {error:insertError} = await supabase.from('municipalities').insert({province_id:selectedProvince,name:newMunicipality.trim(),slug:`${slugify(provinces.find(p=>p.id===selectedProvince)?.name||'zona')}-${slugify(newMunicipality)}`,is_enabled:false,sort_order:municipalities.filter(m=>m.province_id===selectedProvince).length+1})
     if (insertError) setError(insertError.message)
     else { setNewMunicipality(''); setNotice('Municipio añadido, inicialmente deshabilitado.'); await refresh() }
+    setBusy(false)
+  }
+
+  async function renameProvince(province:Province) {
+    if (!supabase) return
+    const nextName=window.prompt('Nuevo nombre de la provincia:',province.name)?.trim()
+    if(!nextName || nextName===province.name) return
+    setBusy(true); setError('')
+    const {error:updateError}=await supabase.from('provinces').update({name:nextName,slug:slugify(nextName)}).eq('id',province.id)
+    if(updateError)setError(updateError.message)
+    else {setNotice('Provincia actualizada.'); await refresh()}
+    setBusy(false)
+  }
+
+  async function renameMunicipality(municipality:Municipality) {
+    if (!supabase) return
+    const nextName=window.prompt('Nuevo nombre del municipio:',municipality.name)?.trim()
+    if(!nextName || nextName===municipality.name) return
+    const provinceName=provinces.find(p=>p.id===municipality.province_id)?.name||'zona'
+    setBusy(true); setError('')
+    const {error:updateError}=await supabase.from('municipalities').update({name:nextName,slug:`${slugify(provinceName)}-${slugify(nextName)}`}).eq('id',municipality.id)
+    if(updateError)setError(updateError.message)
+    else {setNotice('Municipio actualizado.'); await refresh()}
+    setBusy(false)
+  }
+
+  async function deleteProvince(province:Province) {
+    if (!supabase || !window.confirm(`¿Eliminar ${province.name} y todos sus municipios? Esta acción no se puede deshacer.`)) return
+    setBusy(true); setError('')
+    const {error:deleteError}=await supabase.from('provinces').delete().eq('id',province.id)
+    if(deleteError)setError(deleteError.message)
+    else {setNotice(`Provincia ${province.name} eliminada junto con sus municipios.`); if(selectedProvince===province.id)setSelectedProvince(''); await refresh()}
+    setBusy(false)
+  }
+
+  async function deleteMunicipality(municipality:Municipality) {
+    if (!supabase || !window.confirm(`¿Eliminar el municipio ${municipality.name}?`)) return
+    setBusy(true); setError('')
+    const {error:deleteError}=await supabase.from('municipalities').delete().eq('id',municipality.id)
+    if(deleteError)setError(deleteError.message)
+    else {setNotice(`Municipio ${municipality.name} eliminado.`); await refresh()}
     setBusy(false)
   }
 
@@ -360,9 +394,10 @@ export default function AdminApp() {
 
   return <main className="admin-page admin-dashboard"><header className="admin-top"><div className="admin-brand-heading"><img src="/brand/world-tree-logo.jpg" alt="World Tree"/><div><span className="eyebrow">WORLD TREE</span><h1>Panel de administración</h1></div></div><p>Tu amiga podrá añadir tantos productos como necesite, sin límite impuesto por la aplicación.</p><button className="admin-logout" onClick={logout}><LogOut size={16}/> Cerrar sesión</button></header>
     {error && <p className="admin-error">{error}</p>}{notice && <p className="admin-notice">{notice}</p>}
-    <section className="admin-card" id="product-editor"><div className="admin-section-title"><div><h2>{editing?'Editar producto':'Catálogo de productos'}</h2><p>{products.length} productos registrados</p></div><button className="refresh" onClick={refresh} disabled={busy}><RefreshCw size={15}/> Actualizar</button></div>
-      <form className="admin-product-form" onSubmit={saveProduct}><h3><PackagePlus size={18}/> {editing?'Modificar producto':'Añadir nuevo producto'}</h3>
-        <label>Nombre del producto<input value={name} onChange={e=>{setName(e.target.value);if(!editing)setSlug(slugify(e.target.value))}} required/></label>
+    <section className="admin-card" id="products"><div className="admin-section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}><div><h2><PackagePlus size={18}/> Productos</h2><p>{products.length} producto{products.length!==1?'s':''} registrados</p></div><button className="refresh" style={{background:'#07152e',color:'#fff'}} onClick={()=>{resetForm();setShowProductModal(true)}}><Plus size={14}/> Nuevo producto</button></div>
+      <div className="admin-filters"><label>Buscar producto</label><input type="text" value={productFilter} onChange={e=>setProductFilter(e.target.value)} placeholder="Buscar por nombre o slug"/><button className="refresh" onClick={refresh} disabled={busy}><RefreshCw size={14}/> Actualizar</button></div>
+      {showProductModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetForm()}}><section className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title"><div className="admin-modal-heading"><h3 id="product-modal-title">{editing?'Editar producto':'Nuevo producto'}</h3><button type="button" className="danger-button" onClick={resetForm}><X size={18}/></button></div><form className="admin-product-form" onSubmit={saveProduct}>
+      <label>Nombre del producto<input value={name} onChange={e=>{setName(e.target.value);if(!editing)setSlug(slugify(e.target.value))}} required/></label>
         <label>Identificador URL<input value={slug} onChange={e=>setSlug(e.target.value)} placeholder="se-genera-del-nombre" required/></label>
         <label>Categoría<select value={categoryId} onChange={e=>setCategoryId(e.target.value)} required><option value="">Selecciona</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label>Disponibilidad<select value={status} onChange={e=>setStatus(e.target.value)}>{statuses.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
@@ -370,12 +405,12 @@ export default function AdminApp() {
         <div className="wide price-editor"><h4>Precios por tarifa</h4><p>Deja vacío el precio que todavía no esté disponible. No se calcula ni convierte automáticamente.</p><div className="price-grid">{options.map(o=><label key={o.id}>{o.display_name}<input inputMode="decimal" placeholder="Precio pendiente" value={prices[o.id]||''} onChange={e=>setPrices({...prices,[o.id]:e.target.value})}/></label>)}</div></div>
         <label className="wide image-upload"><ImagePlus size={18}/> Fotografía del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)}/><small>{imageFile?imageFile.name:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':editing?'Guardar cambios':'Crear producto'}</button>{editing&&<button type="button" className="refresh" onClick={resetForm}><X size={15}/> Cancelar edición</button>}</div>
-      </form>
+      </form></section></div>}
       <div className="admin-filters"><label>Buscar producto<input type="text" value={productFilter} onChange={e=>setProductFilter(e.target.value)} placeholder="Buscar por nombre o slug"/></label></div>
       <div className="admin-product-list">{products.filter(p=>p.name.toLowerCase().includes(productFilter.toLowerCase())||p.slug.includes(productFilter)).map(product=><article key={product.id}><div><b>{product.name}</b><small>{product.slug} · {categories.find(c=>c.id===product.category_id)?.name||'Sin categoría'} · {statuses.find(s=>s[0]===product.status)?.[1]||product.status}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editProduct(product)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteProduct(product)} aria-label={`Eliminar ${product.name}`}><Trash2 size={15}/></button></div></article>)}</div>
     </section>
-    <section className="admin-card" id="combo-editor"><div className="admin-section-title"><div><h2>Combos y promociones</h2><p>{combos.filter(c=>c.name.toLowerCase().includes(comboFilter.toLowerCase())).length} de {combos.length} combos</p></div></div>
-      <form className="admin-product-form" onSubmit={saveCombo}><h3>{comboEditing?'Modificar combo':'Crear combo o promoción'}</h3>
+    <section className="admin-card" id="combo-editor"><div className="admin-section-title"><div><h2>Combos y promociones</h2><p>{combos.filter(c=>c.name.toLowerCase().includes(comboFilter.toLowerCase())).length} de {combos.length} combos</p></div><button type="button" className="refresh" onClick={()=>{resetCombo();setShowComboModal(true)}}><Plus size={14}/> Nuevo combo</button></div>
+      {showComboModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetCombo()}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>{comboEditing?'Editar combo':'Nuevo combo o promoción'}</h3><button type="button" className="danger-button" onClick={resetCombo}><X size={18}/></button></div><form className="admin-product-form" onSubmit={saveCombo}><h3>{comboEditing?'Modificar combo':'Crear combo o promoción'}</h3>
         <label>Nombre<input value={comboName} onChange={e=>{setComboName(e.target.value);if(!comboEditing)setComboSlug(slugify(e.target.value))}} required/></label>
         <label>Identificador URL<input value={comboSlug} onChange={e=>setComboSlug(e.target.value)} required/></label>
         <label>Estado<select value={comboStatus} onChange={e=>setComboStatus(e.target.value)}><option value="available">Disponible</option><option value="sold_out">Agotado</option><option value="hidden">Oculto</option></select></label>
@@ -385,15 +420,15 @@ export default function AdminApp() {
         <label>Inicio de promoción (opcional)<input type="datetime-local" value={promoStart} onChange={e=>setPromoStart(e.target.value)}/></label><label>Fin de promoción (opcional)<input type="datetime-local" value={promoEnd} onChange={e=>setPromoEnd(e.target.value)}/></label>
         <label className="wide image-upload"><ImagePlus size={18}/> Imagen del combo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setComboImage(e.target.files?.[0]||null)}/><small>{comboImage?comboImage.name:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':comboEditing?'Guardar cambios':'Crear combo'}</button>{comboEditing&&<button type="button" className="refresh" onClick={resetCombo}>Cancelar edición</button>}</div>
-      </form>
+      </form></section></div>}
       <div className="admin-filters"><label>Buscar combo<input type="text" value={comboFilter} onChange={e=>setComboFilter(e.target.value)} placeholder="Buscar por nombre o slug"/></label></div>
       <div className="admin-product-list">{combos.filter(c=>c.name.toLowerCase().includes(comboFilter.toLowerCase())||c.slug.includes(comboFilter)).map(c=><article key={c.id}><div><b>{c.name}</b><small>{c.slug} · {c.status}{c.starts_at?` · Desde ${new Date(c.starts_at).toLocaleString()}`:''}{c.ends_at?` · Hasta ${new Date(c.ends_at).toLocaleString()}`:''}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editCombo(c)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCombo(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></article>)}</div>
     </section>
-    <section className="admin-card"><h2><Tags size={19}/> Categorías</h2><p>Las categorías también pueden crecer con el catálogo.</p><form className="inline-admin-form" onSubmit={addCategory}><input value={newCategory} onChange={e=>setNewCategory(e.target.value)} placeholder="Nueva categoría" required/><button className="refresh" disabled={busy}>Añadir</button></form><div className="admin-category-list">{categories.map(c=><div className="admin-category-row" key={c.id}>{editingCategory===c.id ? <><input value={editingCategoryName} onChange={e=>setEditingCategoryName(e.target.value)}/><button className="refresh" onClick={()=>saveCategoryEdit(c)} disabled={busy}>Guardar</button><button className="refresh" onClick={()=>setEditingCategory(null)}>Cancelar</button></> : <><b>{c.name}</b><div className="row-actions"><button className="refresh" onClick={()=>{setEditingCategory(c.id);setEditingCategoryName(c.name)}}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCategory(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></>}</div>)}</div></section>
-    <section className="admin-card"><h2><MapPin size={19}/> Zonas de entrega</h2><p>Inicialmente Santiago de Cuba y sus municipios. Las provincias nuevas se crean deshabilitadas hasta que la propietaria decida ofrecer entregas allí.</p>
+    <section className="admin-card"><div className="admin-section-title"><div><h2><Tags size={19}/> Categorías</h2><p>{categories.length} categorías registradas</p></div><button type="button" className="refresh" onClick={()=>setShowCategoryModal(true)}><Plus size={14}/> Gestionar categorías</button></div>{showCategoryModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowCategoryModal(false)}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>Gestionar categorías</h3><button type="button" className="danger-button" onClick={()=>setShowCategoryModal(false)}><X size={18}/></button></div><p>Añade, edita o elimina categorías.</p><form className="inline-admin-form" onSubmit={addCategory}><input value={newCategory} onChange={e=>setNewCategory(e.target.value)} placeholder="Nueva categoría" required/><button className="refresh" disabled={busy}>Añadir</button></form><div className="admin-category-list">{categories.map(c=><div className="admin-category-row" key={c.id}>{editingCategory===c.id ? <><input value={editingCategoryName} onChange={e=>setEditingCategoryName(e.target.value)}/><button className="refresh" onClick={()=>saveCategoryEdit(c)} disabled={busy}>Guardar</button><button className="refresh" onClick={()=>setEditingCategory(null)}>Cancelar</button></> : <><b>{c.name}</b><div className="row-actions"><button className="refresh" onClick={()=>{setEditingCategory(c.id);setEditingCategoryName(c.name)}}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCategory(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></>}</div>)}</div></section></div>}</section>
+    <section className="admin-card"><div className="admin-section-title"><div><h2><MapPin size={19}/> Zonas de entrega</h2><p>Gestiona provincias y municipios.</p></div><button type="button" className="refresh" onClick={()=>setShowZonesModal(true)}><Plus size={14}/> Gestionar zonas</button></div>{showZonesModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowZonesModal(false)}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>Zonas de entrega</h3><button type="button" className="danger-button" onClick={()=>setShowZonesModal(false)}><X size={18}/></button></div><p>Inicialmente Santiago de Cuba y sus municipios. Las provincias nuevas se crean deshabilitadas hasta que la propietaria decida ofrecer entregas allí.</p>
       <form className="inline-admin-form" onSubmit={addProvince}><input value={newProvince} onChange={e=>setNewProvince(e.target.value)} placeholder="Añadir provincia" required/><button className="refresh" disabled={busy}>Añadir provincia</button></form>
-      <div className="zone-list">{provinces.map(p=><div className="zone-block" key={p.id}><div className="zone-heading"><b>{p.name}</b><label className="toggle-label"><input type="checkbox" checked={p.is_enabled} onChange={()=>toggleProvince(p)}/> Habilitada</label></div><div className="municipality-list">{municipalities.filter(m=>m.province_id===p.id).map(m=><label key={m.id}><input type="checkbox" checked={m.is_enabled} onChange={()=>toggleMunicipality(m)}/>{m.name}</label>)}</div></div>)}</div>
-      <form className="inline-admin-form" onSubmit={addMunicipality}><select value={selectedProvince} onChange={e=>setSelectedProvince(e.target.value)}><option value="">Provincia</option>{provinces.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><input value={newMunicipality} onChange={e=>setNewMunicipality(e.target.value)} placeholder="Nuevo municipio" required/><button className="refresh" disabled={busy}>Añadir municipio</button></form>
+      <div className="zone-list">{provinces.map(p=><div className="zone-block" key={p.id}><div className="zone-heading"><b>{p.name}</b><div className="row-actions"><label className="toggle-label"><input type="checkbox" checked={p.is_enabled} onChange={()=>toggleProvince(p)}/> Habilitada</label><button type="button" className="refresh" onClick={()=>renameProvince(p)} aria-label={`Editar provincia ${p.name}`}><Pencil size={14}/></button><button type="button" className="danger-button" onClick={()=>deleteProvince(p)} aria-label={`Eliminar provincia ${p.name}`}><Trash2 size={14}/></button></div></div><div className="municipality-list">{municipalities.filter(m=>m.province_id===p.id).map(m=><div className="municipality-row" key={m.id}><label><input type="checkbox" checked={m.is_enabled} onChange={()=>toggleMunicipality(m)}/>{m.name}</label><button type="button" className="refresh" onClick={()=>renameMunicipality(m)} aria-label={`Editar municipio ${m.name}`}><Pencil size={13}/></button><button type="button" className="danger-button" onClick={()=>deleteMunicipality(m)} aria-label={`Eliminar municipio ${m.name}`}><Trash2 size={13}/></button></div>)}</div></div>)}</div>
+      <form className="inline-admin-form" onSubmit={addMunicipality}><select value={selectedProvince} onChange={e=>setSelectedProvince(e.target.value)}><option value="">Provincia</option>{provinces.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><input value={newMunicipality} onChange={e=>setNewMunicipality(e.target.value)} placeholder="Nuevo municipio" required/><button className="refresh" disabled={busy}>Añadir municipio</button></form></section></div>}
     </section>
     <section className="admin-card"><h2>Buenas prácticas</h2><p>Los productos agotados pueden seguir visibles, pero no deben poder añadirse al carrito. Los ocultos no aparecen en el catálogo público. Los precios vacíos se muestran como pendientes y no se convierten automáticamente. Mantén la cuenta propietaria privada y no habilites el registro público.</p></section>
   </main>

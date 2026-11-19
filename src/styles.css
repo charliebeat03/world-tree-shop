@@ -66,3 +66,15 @@
 .admin-top{background:rgba(0,0,0,.2);border-radius:12px;padding:14px 18px;margin-bottom:16px;backdrop-filter:blur(6px)}
 button.added{animation:addedPulse 0.4s ease-out;transform:scale(1.05);background:#e9c568!important;color:#07152e!important;border-color:#e9c568!important}
 @keyframes addedPulse{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1.05)}}
+
+/* Admin quick-access dialogs */
+.admin-modal-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(5,13,29,.68);display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto}
+.admin-modal{width:min(820px,100%);max-height:min(90vh,900px);overflow-y:auto;background:#fff;border-radius:18px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.28);color:#14213a}
+.admin-modal-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.admin-modal-heading h3{margin:0;font-size:1.25rem}
+.admin-modal .admin-product-form{margin:0}
+.admin-modal .inline-admin-form{margin:16px 0}
+.admin-modal .zone-list,.admin-modal .admin-category-list{max-height:42vh;overflow-y:auto}
+@media(max-width:600px){.admin-modal-backdrop{padding:8px;align-items:flex-end}.admin-modal{padding:18px;border-radius:18px 18px 10px 10px;max-height:94vh}.admin-section-title{gap:12px;flex-wrap:wrap}.admin-section-title>.refresh{white-space:nowrap}}
+.admin-modal .municipality-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0}
+.admin-modal .municipality-row label{display:flex;align-items:center;gap:8px}
