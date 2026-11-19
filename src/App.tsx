@@ -32,6 +32,23 @@ export default function App(){
   const [toast,setToast]=useState<{msg:string;ts:number}|null>(null)
   const [justAdded,setJustAdded]=useState<string|null>(null)
 
+  // Keep the page behind the cart from scrolling while the cart drawer is open.
+  useEffect(()=>{
+   if(!showCart)return
+   const previousOverflow=document.body.style.overflow
+   const previousPaddingRight=document.body.style.paddingRight
+   const scrollbarWidth=window.innerWidth-document.documentElement.clientWidth
+   document.body.style.overflow='hidden'
+   if(scrollbarWidth>0)document.body.style.paddingRight=`${scrollbarWidth}px`
+   const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')setShowCart(false)}
+   window.addEventListener('keydown',onKeyDown)
+   return()=>{
+    document.body.style.overflow=previousOverflow
+    document.body.style.paddingRight=previousPaddingRight
+    window.removeEventListener('keydown',onKeyDown)
+   }
+  },[showCart])
+
   useEffect(()=>{localStorage.setItem('worldtree-tariff',tariff)},[tariff])
  useEffect(()=>{
   let active=true
@@ -90,7 +107,7 @@ const addLine=(line:CartLine)=>{if(line.status==='sold_out'||line.price===undefi
    <section className="delivery-note"><div className="delivery-mark"><MapPin size={25}/></div><div><h2>Entregamos en Santiago de Cuba</h2><p>Los municipios disponibles se muestran al realizar la solicitud. Los repartos a municipios se coordinan para los sábados. Otras provincias estarán disponibles cuando la propietaria las habilite.</p></div></section>
   </main>
   <footer><div className="footer-brand"><img className="footer-logo" src="/brand/world-tree-logo.jpg" alt=""/><strong>WORLD TREE</strong></div><span>Tu mundo, en un solo lugar.</span><small>Los pedidos se confirman personalmente por WhatsApp. Los precios y la disponibilidad pueden variar hasta la confirmación.</small></footer>
-  {showCart&&<div className="overlay" onClick={()=>setShowCart(false)}><section className="drawer" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><span className="eyebrow">TU PEDIDO</span><h2>Carrito</h2></div><button className="icon-button" onClick={()=>setShowCart(false)} aria-label="Cerrar"><X/></button></div>
+  {showCart&&<div className="overlay" onClick={()=>setShowCart(false)}><section className="drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><span className="eyebrow">TU PEDIDO</span><h2 id="cart-title">Carrito</h2></div><button className="icon-button" onClick={()=>setShowCart(false)} aria-label="Cerrar"><X/></button></div>
    {!cart.length?<div className="empty-cart"><ShoppingBag size={35}/><h3>Tu carrito está esperando</h3><p>Añade productos del catálogo para preparar la solicitud.</p></div>:<><div className="cart-lines">{cart.map(l=><div className="cart-line" key={`${l.kind}-${l.id}`}><div><b>{l.name}</b><small>{l.price===undefined?'Precio pendiente':money(l.price,tariff)} por unidad</small></div><div className="quantity"><button onClick={()=>changeQty(l.id,l.kind,-1)}><Minus size={14}/></button><span>{l.quantity}</span><button onClick={()=>changeQty(l.id,l.kind,1)}><Plus size={14}/></button></div><button className="remove" onClick={()=>setCart(prev=>prev.filter(x=>!(x.id===l.id&&x.kind===l.kind)))} aria-label="Eliminar"><X size={15}/></button></div>)}</div><div className="cart-total"><span>Subtotal estimado</span><strong>{money(subtotal,tariff)}</strong></div><p className="fineprint">Importe orientativo, sujeto a confirmación.</p>
    <div className="order-form"><h3>Datos para coordinar la entrega</h3><p>El nombre y carnet del destinatario deben coincidir al recibir la mercancía. Estos datos se incluirán en el mensaje de WhatsApp y no se guardarán en la web.</p>
     <label>Nombre completo del comprador *<input value={buyer.name} onChange={e=>setBuyer({...buyer,name:e.target.value})}/></label><label>Teléfono del comprador *<input value={buyer.phone} onChange={e=>setBuyer({...buyer,phone:e.target.value})}/></label><label>Nombre completo del destinatario *<input value={buyer.recipient} onChange={e=>setBuyer({...buyer,recipient:e.target.value})}/></label><label>Carnet de identidad del destinatario *<input value={buyer.idCard} onChange={e=>setBuyer({...buyer,idCard:e.target.value})} inputMode="numeric" autoComplete="off"/></label><label>Teléfono del destinatario *<input value={buyer.recipientPhone} onChange={e=>setBuyer({...buyer,recipientPhone:e.target.value})}/></label>
