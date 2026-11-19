@@ -7,3 +7,8 @@
 No se modificó la configuración de Supabase ni la base de datos.
 - La ventana de zonas también permite renombrar y eliminar provincias o municipios. Al eliminar una provincia, Supabase elimina sus municipios asociados por la relación en cascada definida en el esquema.
 - Se incluyen los `slug` obligatorios al crear provincias y municipios.
+
+## Corrección del carrito móvil (19-11-2026)
+
+- `src/App.tsx`: el carrito ahora bloquea el desplazamiento de la página que queda detrás mientras está abierto y se puede cerrar con la tecla Escape. Se añadieron atributos accesibles de diálogo (`role`, `aria-modal` y `aria-labelledby`).
+- `src/styles.css`: el panel del carrito y su fondo ahora se dibujan por encima de la cabecera fija; el panel ocupa la altura visible del dispositivo, gestiona el desplazamiento internamente y respeta las áreas seguras de móviles. También se ajusta el tamaño de las imágenes de producto para evitar desbordamientos.
