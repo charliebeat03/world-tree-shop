@@ -178,3 +178,6 @@ button.added{animation:addedPulse 0.4s ease-out;transform:scale(1.05);background
 .combo-modal-add:disabled{opacity:.4;cursor:not-allowed}
 .combo-modal-close{border:1px solid #e1dfd6;background:#fff;color:#485365}
 @media(max-width:560px){.combo-modal-backdrop{padding:0;align-items:flex-end}.combo-modal{width:100%;max-height:94dvh;border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom))}.combo-modal-head h2{font-size:25px}.combo-product-thumb{width:56px;height:56px;flex-basis:56px}.combo-modal-actions{flex-direction:column}.combo-modal-close{width:100%}}
+
+/* Fallback visible when a stored product image is missing or cannot be loaded. */
+.image-fallback-hidden{display:none!important}
