@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, ShoppingBag, Plus, Minus, X, TreePine, ArrowRight, ShieldCheck, MapPin, Clock3, RefreshCw, Gift } from 'lucide-react'
 import { supabase, supabaseConfigured } from './lib_supabase'
 
-type Tariff = 'Zelle'|'IBAN'|'Bizum'|'Posta'|'Reales'|'MXN'|'PDO'|'Rublos'
+type Tariff = 'Zelle'|'IBAN'|'Bizum'|'Posta'|'Reales'|'MXN'|'PDO'|'Rublos'|'Guyana'|'Western'
 type Category = { id:string; name:string }
 type PriceRow = { pricing_option_id:string; amount:number|string; pricing_options:{code:Tariff;display_name:string}|null }
 type ProductRow = { id:string; name:string; description:string; status:'available'|'check_availability'|'sold_out'|'hidden'; categories:Category|null; product_prices:PriceRow[]; product_images:{storage_path:string;alt_text:string;sort_order:number}[] }
@@ -10,7 +10,7 @@ type ComboRow = { id:string; name:string; description:string; status:'available'
 type Zone = { id:string; name:string; is_enabled:boolean; provinces:{name:string}|null }
 type CartLine = { id:string; name:string; kind:'product'|'combo'; quantity:number; price?:number; status:string }
 
-const tariffs:Tariff[]=['Zelle','IBAN','Bizum','Posta','Reales','MXN','PDO','Rublos']
+const tariffs:Tariff[]=['Zelle','IBAN','Bizum','Posta','Reales','MXN','PDO','Rublos','Guyana','Western']
 const waNumber=import.meta.env.VITE_WHATSAPP_NUMBER||'5353526551'
 const fallbackMunicipalities=['Santiago de Cuba','Contramaestre','Palma Soriano','San Luis','Songo-La Maya','Segundo Frente','Tercer Frente','Guamá','Mella']
 const money=(n:number,t:Tariff)=>`${n.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})} ${t}`
@@ -93,7 +93,7 @@ const addLine=(line:CartLine)=>{if(line.status==='sold_out'||line.price===undefi
 
  return <div className="site-shell">
   <div className="topline">ENTREGAS EN SANTIAGO DE CUBA · PEDIDOS POR WHATSAPP</div>
-  <header className="header"><a className="brand" href="#"><img className="brand-logo" src="/brand/world-tree-logo.jpg" alt="World Tree"/><span><strong>WORLD TREE</strong><small>TIENDA ONLINE</small></span></a><div className="header-right"><label className="tariff-select"><span>Tarifa</span><select value={tariff} onChange={e=>setTariff(e.target.value as Tariff)}>{tariffs.map(t=><option key={t}>{t}</option>)}</select></label><button className="cart-button" onClick={()=>setShowCart(true)}><ShoppingBag size={18}/><span>Carrito</span><b>{cart.reduce((n,l)=>n+l.quantity,0)}</b></button></div></header>
+  <header className="header"><a className="brand" href="#"><img className="brand-logo" src="/brand/world-tree-logo.jpg" alt="World Tree"/><span><strong>WORLD TREE</strong><small>TIENDA ONLINE</small></span></a><div className="header-right"><label className="tariff-select"><span>Tarifa</span><select value={tariff} onChange={e=>setTariff(e.target.value as Tariff)}>{tariffs.map(t=><option key={t}>{t==='Guyana'?'Guyana (DGY)':t==='Western'?'Western Union':t}</option>)}</select></label><button className="cart-button" onClick={()=>setShowCart(true)}><ShoppingBag size={18}/><span>Carrito</span><b>{cart.reduce((n,l)=>n+l.quantity,0)}</b></button></div></header>
   <main>
    <section className="hero"><div className="hero-copy"><span className="eyebrow">TU MUNDO, EN UN SOLO LUGAR</span><h1>Lo que necesitas,<br/><em>más cerca de casa.</em></h1><p>Alimentos, productos para el hogar y mucho más, para quienes quieren cuidar de los suyos en Santiago de Cuba.</p><a className="primary-link" href="#catalog">Explorar catálogo <ArrowRight size={17}/></a><div className="hero-trust"><span><ShieldCheck size={16}/> Atención personalizada</span><span><MapPin size={16}/> Santiago de Cuba</span></div></div><div className="hero-art"><div className="orbit orbit-one"></div><div className="planet">🌎</div><div className="tree-crown">🌳</div><div className="gold-seal">WORLD TREE<br/><small>TIENDA ONLINE</small></div></div></section>
    <section className="service-strip"><div><MapPin/><span><b>Entrega local</b><small>Santiago de Cuba y sus municipios</small></span></div><div><Clock3/><span><b>Pedidos por encargo</b><small>Tiempo estimado: 24 a 48 horas</small></span></div><div><ShieldCheck/><span><b>Atención directa</b><small>Confirmación por WhatsApp</small></span></div></section>
