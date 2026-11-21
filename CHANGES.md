@@ -1,14 +1,17 @@
-# Cambios de esta actualización
+# Cambios recientes
 
-- `src/vite-env.d.ts`: añade las definiciones de tipos de Vite para que TypeScript reconozca `import.meta.env` y corrija el error TS2339 durante el build de Render.
-- `src/AdminApp.tsx`: convierte los formularios de producto, combo, categorías y zonas de entrega en ventanas modales. Se accede desde botones directos en cada sección; editar producto o combo abre su formulario sin desplazarse por toda la página. Se mantienen los filtros y las operaciones existentes.
-- `src/styles.css`: estilos adaptables para las ventanas modales, con desplazamiento interno y adaptación a móviles.
+## Panel de administración
+- Se agregó una barra de acceso rápido antes de la sección Productos con enlaces directos a Combos y promociones, Categorías y Zonas de entrega.
+- Se añadieron destinos de navegación estables a las secciones de categorías y zonas de entrega.
+- Se mejoró el contraste del título y subtítulo del panel y de los encabezados de las tarjetas para facilitar su lectura.
+- Se eliminó el campo duplicado de búsqueda de productos; se conserva un único filtro con el botón de actualización.
 
-No se modificó la configuración de Supabase ni la base de datos.
-- La ventana de zonas también permite renombrar y eliminar provincias o municipios. Al eliminar una provincia, Supabase elimina sus municipios asociados por la relación en cascada definida en el esquema.
-- Se incluyen los `slug` obligatorios al crear provincias y municipios.
 
-## Corrección del carrito móvil (19-11-2026)
-
-- `src/App.tsx`: el carrito ahora bloquea el desplazamiento de la página que queda detrás mientras está abierto y se puede cerrar con la tecla Escape. Se añadieron atributos accesibles de diálogo (`role`, `aria-modal` y `aria-labelledby`).
-- `src/styles.css`: el panel del carrito y su fondo ahora se dibujan por encima de la cabecera fija; el panel ocupa la altura visible del dispositivo, gestiona el desplazamiento internamente y respeta las áreas seguras de móviles. También se ajusta el tamaño de las imágenes de producto para evitar desbordamientos.
+## Corrección de gestión de imágenes (2026-11-21)
+- El panel carga y muestra la fotografía actualmente vinculada a cada producto y combo.
+- Se incorpora vista previa de la nueva imagen y opción de retirar la imagen existente.
+- Se comprimen/redimensionan imágenes en el navegador y se convierten a WebP antes de subirlas.
+- El guardado de productos espera la subida a Storage, inserta la referencia en `product_images` y vuelve a leerla para verificar que quedó persistida antes de informar éxito.
+- Los errores distinguen entre fallo de Storage y fallo de escritura/verificación en la base de datos.
+- Se agrega filtro de productos sin fotografía.
+- Se incorpora migración `0004_image_storage_repair.sql` para reestablecer las políticas de Storage y de las tablas de imágenes.
