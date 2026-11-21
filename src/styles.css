@@ -96,3 +96,11 @@ button.added{animation:addedPulse 0.4s ease-out;transform:scale(1.05);background
 @media(max-width:480px){.drawer{width:100%;padding:calc(19px + env(safe-area-inset-top)) 19px calc(19px + env(safe-area-inset-bottom))}.overlay{justify-content:stretch}}
 
 @media(max-width:600px){.admin-quick-nav{gap:8px;padding:12px}.admin-quick-nav span{width:100%;margin:0 0 2px}.admin-quick-nav a{flex:1 1 auto;text-align:center;padding:10px 9px}.admin-top p{max-width:none;margin:0}}
+
+/* World Tree 2.0 - image management */
+.admin-image-preview{display:block;width:100%;max-width:260px;max-height:190px;object-fit:contain;border:1px solid #deddd5;border-radius:10px;background:#f7f7f3;padding:5px;margin:8px 0}
+.image-progress{display:block!important;width:100%;padding:9px 11px;border-radius:8px;background:#eef4ff;color:#183b70!important;font-size:12px!important;font-weight:700}
+.image-upload .danger-button{margin-top:5px}
+.admin-notice,.admin-error{position:relative;z-index:5;overflow-wrap:anywhere}
+
+.image-filter{display:flex;align-items:center;gap:7px;font-size:12px!important;white-space:nowrap}.image-filter input{width:auto!important}

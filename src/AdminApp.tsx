@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { supabase, supabaseConfigured } from './lib_supabase'
 import { ArrowLeft, LogOut, PackagePlus, RefreshCw, ShieldCheck, Pencil, Trash2, ImagePlus, MapPin, Tags, X, Plus } from 'lucide-react'
 
-type ProductRow = { id:string; name:string; slug:string; description:string; status:string; category_id:string }
+type ProductRow = { id:string; name:string; slug:string; description:string; status:string; category_id:string; product_images?:{storage_path:string;alt_text:string;sort_order:number}[] }
 type CategoryRow = { id:string; name:string }
 type PriceOption = { id:string; code:string; display_name:string; is_active:boolean }
 type Province = { id:string; name:string; is_enabled:boolean }
@@ -15,6 +15,18 @@ const statuses = [
 ]
 const emptyPrice = (options:PriceOption[]) => Object.fromEntries(options.map(o=>[o.id,''])) as Record<string,string>
 const slugify = (value:string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')
+
+async function normalizeImage(file:File):Promise<File> {
+  const bitmap=await createImageBitmap(file)
+  const scale=Math.min(1,1800/Math.max(bitmap.width,bitmap.height))
+  const canvas=document.createElement('canvas')
+  canvas.width=Math.max(1,Math.round(bitmap.width*scale)); canvas.height=Math.max(1,Math.round(bitmap.height*scale))
+  const ctx=canvas.getContext('2d')
+  if(!ctx) throw new Error('No se pudo preparar la imagen.')
+  ctx.drawImage(bitmap,0,0,canvas.width,canvas.height); bitmap.close()
+  const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('No se pudo comprimir la imagen.')),'image/webp',0.84))
+  return new File([blob],`${file.name.replace(/\.[^.]+$/,'')}.webp`,{type:'image/webp'})
+}
 
 export default function AdminApp() {
   const [email,setEmail] = useState('')
@@ -28,16 +40,16 @@ export default function AdminApp() {
   const [options,setOptions] = useState<PriceOption[]>([])
   const [provinces,setProvinces] = useState<Province[]>([])
   const [municipalities,setMunicipalities] = useState<Municipality[]>([])
-  const [productFilter,setProductFilter] = useState('')
+  const [productFilter,setProductFilter] = useState(''); const [onlyMissingImages,setOnlyMissingImages] = useState(false)
   const [comboFilter,setComboFilter] = useState('')
   const [combos,setCombos] = useState<any[]>([])
   const [name,setName] = useState(''); const [slug,setSlug] = useState(''); const [categoryId,setCategoryId] = useState('')
   const [description,setDescription] = useState(''); const [status,setStatus] = useState('check_availability')
-  const [prices,setPrices] = useState<Record<string,string>>({}); const [imageFile,setImageFile] = useState<File|null>(null); const [editing,setEditing] = useState<string|null>(null)
+  const [prices,setPrices] = useState<Record<string,string>>({}); const [imageFile,setImageFile] = useState<File|null>(null); const [existingProductImage,setExistingProductImage] = useState<string|null>(null); const [removeProductImage,setRemoveProductImage] = useState(false); const [imageProgress,setImageProgress] = useState(''); const [editing,setEditing] = useState<string|null>(null)
   const [comboEditing,setComboEditing] = useState<string|null>(null); const [comboName,setComboName] = useState(''); const [comboSlug,setComboSlug] = useState('')
   const [comboDescription,setComboDescription] = useState(''); const [comboStatus,setComboStatus] = useState('available')
   const [comboPrices,setComboPrices] = useState<Record<string,string>>({}); const [comboItems,setComboItems] = useState<Record<string,string>>({})
-  const [comboImage,setComboImage] = useState<File|null>(null); const [promoStart,setPromoStart] = useState(''); const [promoEnd,setPromoEnd] = useState('')
+  const [comboImage,setComboImage] = useState<File|null>(null); const [existingComboImage,setExistingComboImage] = useState<string|null>(null); const [removeComboImage,setRemoveComboImage] = useState(false); const [promoStart,setPromoStart] = useState(''); const [promoEnd,setPromoEnd] = useState('')
   const [newCategory,setNewCategory] = useState(''); const [editingCategory,setEditingCategory] = useState<string|null>(null); const [editingCategoryName,setEditingCategoryName] = useState('')
   const [newProvince,setNewProvince] = useState(''); const [newMunicipality,setNewMunicipality] = useState(''); const [selectedProvince,setSelectedProvince] = useState('')
   const [showZonesModal,setShowZonesModal] = useState(false)
@@ -53,7 +65,7 @@ export default function AdminApp() {
     if (!supabase) return
     setBusy(true); setError('')
     const [p,c,o,pr,mu,co] = await Promise.all([
-      supabase.from('products').select('id,name,slug,description,status,category_id').order('created_at',{ascending:false}),
+      supabase.from('products').select('id,name,slug,description,status,category_id,product_images(storage_path,alt_text,sort_order)').order('created_at',{ascending:false}),
       supabase.from('categories').select('id,name').order('sort_order'),
       supabase.from('pricing_options').select('id,code,display_name,is_active').order('sort_order'),
       supabase.from('provinces').select('id,name,is_enabled').order('sort_order'),
@@ -109,7 +121,7 @@ export default function AdminApp() {
 
   function resetForm() {
     setEditing(null); setName(''); setSlug(''); setDescription('')
-    setStatus('check_availability'); setPrices(emptyPrice(options)); setImageFile(null); setShowProductModal(false)
+    setStatus('check_availability'); setPrices(emptyPrice(options)); setImageFile(null); setExistingProductImage(null); setRemoveProductImage(false); setImageProgress(''); setShowProductModal(false)
   }
 
   async function editProduct(product:ProductRow) {
@@ -121,7 +133,7 @@ export default function AdminApp() {
     setCategoryId(product.category_id); setDescription(product.description || ''); setStatus(product.status)
     const next = emptyPrice(options)
     for (const row of data || []) next[row.pricing_option_id] = String(row.amount)
-    setPrices(next); setImageFile(null); setBusy(false)
+    setPrices(next); setImageFile(null); setExistingProductImage(product.product_images?.[0]?.storage_path||null); setRemoveProductImage(false); setBusy(false)
     setShowProductModal(true)
   }
 
@@ -156,38 +168,53 @@ export default function AdminApp() {
       const {error:priceSaveError} = await supabase.from('product_prices').insert(priceRows)
       if (priceSaveError) { setError(priceSaveError.message); setBusy(false); return }
     }
-    if (imageFile && productId) {
-      const extension = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${productId}/${crypto.randomUUID()}.${extension}`
-      const {error:uploadError} = await supabase.storage.from('world-tree-products').upload(path,imageFile,{upsert:false,contentType:imageFile.type})
-      if (uploadError) { setError(`Producto guardado, pero falló la imagen: ${uploadError.message}`); setBusy(false); await refresh(); return }
-      const {data:oldImages,error:oldImagesError} = await supabase.from('product_images').select('storage_path').eq('product_id',productId)
-      if (oldImagesError) {
-        await supabase.storage.from('world-tree-products').remove([path])
-        setError(`La imagen se cargó, pero no se pudieron consultar las imágenes anteriores: ${oldImagesError.message}`)
-        setBusy(false); return
-      }
-      const {error:imageRowError} = await supabase.from('product_images').insert({product_id:productId,storage_path:path,alt_text:name.trim(),sort_order:0})
-      if (imageRowError) {
-        await supabase.storage.from('world-tree-products').remove([path])
-        setError(`La imagen se cargó, pero no se pudo vincular al producto: ${imageRowError.message}. No se confirmó el cambio de imagen.`)
-        setBusy(false); return
-      }
-      if (oldImages?.length) {
-        const {error:oldRowsError} = await supabase.from('product_images').delete().eq('product_id',productId).neq('storage_path',path)
-        if (oldRowsError) {
-          setError(`La nueva imagen quedó vinculada, pero no se pudieron retirar las referencias anteriores: ${oldRowsError.message}`)
-          setBusy(false); await refresh(); return
+    if ((imageFile || removeProductImage) && productId) {
+      const {data:oldImages,error:oldImagesError} = await supabase.from('product_images').select('id,storage_path').eq('product_id',productId)
+      if (oldImagesError) { setError(`No se pudieron consultar las imágenes actuales: ${oldImagesError.message}`); setBusy(false); return }
+      if (imageFile) {
+        try {
+          setImageProgress('Preparando y optimizando la fotografía…')
+          const normalized = await normalizeImage(imageFile)
+          const path = `${productId}/${crypto.randomUUID()}.webp`
+          setImageProgress('Subiendo fotografía a Supabase Storage…')
+          const {error:uploadError} = await supabase.storage.from('world-tree-products').upload(path,normalized,{upsert:false,contentType:'image/webp',cacheControl:'3600'})
+          if (uploadError) { setError(`No se pudo subir la fotografía: ${uploadError.message}`); setImageProgress(''); setBusy(false); return }
+          setImageProgress('Guardando referencia en la base de datos…')
+          const {data:inserted,error:imageRowError} = await supabase.from('product_images').insert({product_id:productId,storage_path:path,alt_text:name.trim(),sort_order:0}).select('id,storage_path').single()
+          if (imageRowError || !inserted) {
+            await supabase.storage.from('world-tree-products').remove([path])
+            setError(`La foto llegó a Storage, pero no se guardó en la tabla product_images: ${imageRowError?.message || 'Supabase no devolvió confirmación.'}`)
+            setImageProgress(''); setBusy(false); return
+          }
+          const {data:checkRows,error:checkError} = await supabase.from('product_images').select('id,storage_path').eq('id',inserted.id).eq('product_id',productId)
+          if (checkError || !checkRows?.length || checkRows[0].storage_path!==path) {
+            setError(`No se pudo verificar la referencia de la fotografía en la base de datos: ${checkError?.message || 'Registro no encontrado.'}`)
+            setImageProgress(''); setBusy(false); await refresh(); return
+          }
+          const oldPaths=(oldImages||[]).map((r:any)=>r.storage_path).filter((p:string)=>p!==path)
+          if(oldPaths.length) {
+            setImageProgress('Foto verificada. Retirando imágenes anteriores…')
+            const {error:deleteRowsError}=await supabase.from('product_images').delete().eq('product_id',productId).neq('storage_path',path)
+            if(deleteRowsError) { setError(`La nueva foto sí está guardada, pero no se pudieron retirar referencias anteriores: ${deleteRowsError.message}`); setImageProgress(''); setBusy(false); await refresh(); return }
+            const {error:deleteFilesError}=await supabase.storage.from('world-tree-products').remove(oldPaths)
+            if(deleteFilesError) { setError(`La nueva foto está guardada, pero no se pudieron limpiar archivos anteriores: ${deleteFilesError.message}`); setImageProgress(''); setBusy(false); await refresh(); return }
+          }
+        } catch (imageError) {
+          setError(`No se pudo procesar la fotografía: ${imageError instanceof Error ? imageError.message : String(imageError)}`)
+          setImageProgress(''); setBusy(false); return
         }
-        const {error:oldFilesError} = await supabase.storage.from('world-tree-products').remove(oldImages.map(i=>i.storage_path))
-        if (oldFilesError) {
-          setError(`La imagen nueva quedó guardada, pero no se pudieron borrar algunos archivos antiguos: ${oldFilesError.message}`)
-          setBusy(false); await refresh(); return
+      } else if (removeProductImage) {
+        const paths=(oldImages||[]).map((r:any)=>r.storage_path)
+        const {error:deleteRowsError}=await supabase.from('product_images').delete().eq('product_id',productId)
+        if(deleteRowsError) { setError(`No se pudo quitar la referencia de imagen: ${deleteRowsError.message}`); setBusy(false); return }
+        if(paths.length) {
+          const {error:deleteFilesError}=await supabase.storage.from('world-tree-products').remove(paths)
+          if(deleteFilesError) { setError(`Se quitó la referencia, pero falló la eliminación del archivo: ${deleteFilesError.message}`); setBusy(false); return }
         }
       }
     }
-    setNotice(imageFile ? (editing ? 'Producto e imagen actualizados correctamente.' : 'Producto e imagen guardados correctamente.') : (editing ? 'Producto actualizado correctamente.' : 'Producto creado correctamente.'))
-    resetForm(); await refresh(); setBusy(false)
+    setNotice(imageFile ? 'Producto y fotografía guardados y verificados correctamente.' : removeProductImage ? 'Producto actualizado y fotografía eliminada.' : (editing ? 'Producto actualizado correctamente.' : 'Producto creado correctamente.'))
+    setImageProgress(''); resetForm(); await refresh(); setBusy(false)
   }
 
   async function deleteProduct(product:ProductRow) {
@@ -244,7 +271,7 @@ export default function AdminApp() {
   function resetCombo() {
     setComboEditing(null); setComboName(''); setComboSlug(''); setComboDescription('')
     setComboStatus('available'); setComboPrices(emptyPrice(options)); setComboItems({})
-    setComboImage(null); setPromoStart(''); setPromoEnd(''); setShowComboModal(false)
+    setComboImage(null); setExistingComboImage(null); setRemoveComboImage(false); setPromoStart(''); setPromoEnd(''); setShowComboModal(false)
   }
 
   async function editCombo(combo:any) {
@@ -264,7 +291,7 @@ export default function AdminApp() {
     setComboPrices(nextPrices); setComboItems(nextItems)
     setPromoStart(combo.starts_at ? combo.starts_at.slice(0,16) : '')
     setPromoEnd(combo.ends_at ? combo.ends_at.slice(0,16) : '')
-    setComboImage(null); setBusy(false)
+    setComboImage(null); setRemoveComboImage(false); const {data:comboImageRows}=await supabase.from('combo_images').select('storage_path').eq('combo_id',combo.id).order('sort_order').limit(1); setExistingComboImage(comboImageRows?.[0]?.storage_path||null); setBusy(false)
     setShowComboModal(true)
   }
 
@@ -297,9 +324,9 @@ export default function AdminApp() {
     const priceRows=options.flatMap(option=>{const raw=comboPrices[option.id]?.trim();if(!raw)return[];const amount=Number(raw.replace(',','.'));return Number.isFinite(amount)&&amount>=0?[{combo_id:id,pricing_option_id:option.id,amount}]:[]})
     if(priceRows.length){const {error:priceInsertError}=await supabase.from('combo_prices').insert(priceRows);if(priceInsertError){setError(priceInsertError.message);setBusy(false);return}}
     if(comboImage){
-      const ext=comboImage.name.split('.').pop()?.toLowerCase()||'jpg'
-      const path=`combos/${id}/${crypto.randomUUID()}.${ext}`
-      const {error:uploadError}=await supabase.storage.from('world-tree-products').upload(path,comboImage,{contentType:comboImage.type})
+      const path=`combos/${id}/${crypto.randomUUID()}.webp`
+      const optimizedComboImage=await normalizeImage(comboImage)
+      const {error:uploadError}=await supabase.storage.from('world-tree-products').upload(path,optimizedComboImage,{contentType:'image/webp',cacheControl:'3600'})
       if(uploadError){setError(`Combo guardado, pero falló la imagen: ${uploadError.message}`);setBusy(false);await refresh();return}
       const {data:oldImages,error:oldImagesError}=await supabase.from('combo_images').select('storage_path').eq('combo_id',id)
       if(oldImagesError){
@@ -307,11 +334,16 @@ export default function AdminApp() {
         setError(`La imagen se cargó, pero no se pudieron consultar las imágenes anteriores: ${oldImagesError.message}`)
         setBusy(false);return
       }
-      const {error:imageError}=await supabase.from('combo_images').insert({combo_id:id,storage_path:path,alt_text:comboName.trim(),sort_order:0})
-      if(imageError){
+      const {data:insertedComboImage,error:imageError}=await supabase.from('combo_images').insert({combo_id:id,storage_path:path,alt_text:comboName.trim(),sort_order:0}).select('id,storage_path').single()
+      if(imageError || !insertedComboImage){
         await supabase.storage.from('world-tree-products').remove([path])
-        setError(`La imagen se cargó, pero no se pudo vincular al combo: ${imageError.message}. No se confirmó el cambio de imagen.`)
+        setError(`La imagen se cargó, pero no se pudo guardar su referencia en la base de datos: ${imageError?.message||'Supabase no devolvió confirmación.'}`)
         setBusy(false);return
+      }
+      const {data:verifiedComboRows,error:verifyComboError}=await supabase.from('combo_images').select('id,storage_path').eq('id',insertedComboImage.id).eq('combo_id',id)
+      if(verifyComboError || !verifiedComboRows?.length || verifiedComboRows[0].storage_path!==path){
+        setError(`La foto del combo se subió, pero no se pudo verificar en la base de datos: ${verifyComboError?.message||'Registro no encontrado.'}`)
+        setBusy(false);await refresh();return
       }
       if(oldImages?.length){
         const {error:oldRowsError}=await supabase.from('combo_images').delete().eq('combo_id',id).neq('storage_path',path)
@@ -319,8 +351,14 @@ export default function AdminApp() {
         const {error:oldFilesError}=await supabase.storage.from('world-tree-products').remove(oldImages.map((i:any)=>i.storage_path))
         if(oldFilesError){setError(`La imagen nueva quedó guardada, pero no se pudieron borrar algunos archivos antiguos: ${oldFilesError.message}`);setBusy(false);await refresh();return}
       }
+    } else if(removeComboImage && id) {
+      const {data:oldComboImages,error:oldComboImagesError}=await supabase.from('combo_images').select('storage_path').eq('combo_id',id)
+      if(oldComboImagesError){setError(`No se pudo consultar la imagen del combo: ${oldComboImagesError.message}`);setBusy(false);return}
+      const {error:removeComboRowsError}=await supabase.from('combo_images').delete().eq('combo_id',id)
+      if(removeComboRowsError){setError(`No se pudo quitar la referencia de imagen del combo: ${removeComboRowsError.message}`);setBusy(false);return}
+      if(oldComboImages?.length){const {error:removeComboFilesError}=await supabase.storage.from('world-tree-products').remove(oldComboImages.map((r:any)=>r.storage_path));if(removeComboFilesError){setError(`Se quitó la referencia, pero no se pudieron borrar todos los archivos: ${removeComboFilesError.message}`);setBusy(false);return}}
     }
-    setNotice(comboImage ? (comboEditing?'Combo e imagen actualizados correctamente.':'Combo e imagen guardados correctamente.') : (comboEditing?'Combo actualizado correctamente.':'Combo creado correctamente.'))
+    setNotice(comboImage ? 'Combo y fotografía guardados y verificados correctamente.' : removeComboImage ? 'Combo actualizado y fotografía eliminada.' : (comboEditing?'Combo actualizado correctamente.':'Combo creado correctamente.'))
     resetCombo(); await refresh(); setBusy(false)
   }
 
@@ -429,7 +467,7 @@ export default function AdminApp() {
       <a href="#delivery-zones">Zonas de entrega</a>
     </nav>
     <section className="admin-card" id="products"><div className="admin-section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}><div><h2><PackagePlus size={18}/> Productos</h2><p>{products.length} producto{products.length!==1?'s':''} registrados</p></div><button className="refresh" style={{background:'#07152e',color:'#fff'}} onClick={()=>{resetForm();setShowProductModal(true)}}><Plus size={14}/> Nuevo producto</button></div>
-      <div className="admin-filters"><label>Buscar producto</label><input type="text" value={productFilter} onChange={e=>setProductFilter(e.target.value)} placeholder="Buscar por nombre o slug"/><button className="refresh" onClick={refresh} disabled={busy}><RefreshCw size={14}/> Actualizar</button></div>
+      <div className="admin-filters"><label>Buscar producto</label><input type="text" value={productFilter} onChange={e=>setProductFilter(e.target.value)} placeholder="Buscar por nombre o slug"/><label className="image-filter"><input type="checkbox" checked={onlyMissingImages} onChange={e=>setOnlyMissingImages(e.target.checked)}/> Solo productos sin fotografía</label><button className="refresh" onClick={refresh} disabled={busy}><RefreshCw size={14}/> Actualizar</button></div>
       {showProductModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetForm()}}><section className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title"><div className="admin-modal-heading"><h3 id="product-modal-title">{editing?'Editar producto':'Nuevo producto'}</h3><button type="button" className="danger-button" onClick={resetForm}><X size={18}/></button></div><form className="admin-product-form" onSubmit={saveProduct}>
       <label>Nombre del producto<input value={name} onChange={e=>{setName(e.target.value);if(!editing)setSlug(slugify(e.target.value))}} required/></label>
         <label>Identificador URL<input value={slug} onChange={e=>setSlug(e.target.value)} placeholder="se-genera-del-nombre" required/></label>
@@ -437,10 +475,10 @@ export default function AdminApp() {
         <label>Disponibilidad<select value={status} onChange={e=>setStatus(e.target.value)}>{statuses.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
         <label className="wide">Descripción<textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
         <div className="wide price-editor"><h4>Precios por tarifa</h4><p>Deja vacío el precio que todavía no esté disponible. No se calcula ni convierte automáticamente.</p><div className="price-grid">{options.map(o=><label key={o.id}>{o.display_name}<input inputMode="decimal" placeholder="Precio pendiente" value={prices[o.id]||''} onChange={e=>setPrices({...prices,[o.id]:e.target.value})}/></label>)}</div></div>
-        <label className="wide image-upload"><ImagePlus size={18}/> Fotografía del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)}/><small>{imageFile?`Seleccionada: ${imageFile.name} · Se guardará al pulsar Guardar.`:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
+        <label className="wide image-upload"><ImagePlus size={18}/> Fotografía del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)}/><small>{imageFile?`Nueva fotografía seleccionada: ${imageFile.name}`:existingProductImage?'Fotografía guardada actualmente. Puedes reemplazarla o quitarla.':'Este producto no tiene fotografía guardada.'} · JPG, PNG o WebP · Máximo 5 MB.</small>{imageFile&&<img className="admin-image-preview" src={URL.createObjectURL(imageFile)} alt="Vista previa de la nueva fotografía"/>}{!imageFile&&existingProductImage&&supabase&&<img className="admin-image-preview" src={supabase.storage.from('world-tree-products').getPublicUrl(existingProductImage).data.publicUrl} alt="Fotografía actual del producto"/>}{editing&&existingProductImage&&<button type="button" className="danger-button" onClick={()=>{setExistingProductImage(null);setRemoveProductImage(true)}}>Quitar fotografía actual</button>}{imageProgress&&<small className="image-progress">{imageProgress}</small>}</label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':editing?'Guardar cambios':'Crear producto'}</button>{editing&&<button type="button" className="refresh" onClick={resetForm}><X size={15}/> Cancelar edición</button>}</div>
       </form></section></div>}
-      <div className="admin-product-list">{products.filter(p=>p.name.toLowerCase().includes(productFilter.toLowerCase())||p.slug.includes(productFilter)).map(product=><article key={product.id}><div><b>{product.name}</b><small>{product.slug} · {categories.find(c=>c.id===product.category_id)?.name||'Sin categoría'} · {statuses.find(s=>s[0]===product.status)?.[1]||product.status}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editProduct(product)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteProduct(product)} aria-label={`Eliminar ${product.name}`}><Trash2 size={15}/></button></div></article>)}</div>
+      <div className="admin-product-list">{products.filter(p=>(p.name.toLowerCase().includes(productFilter.toLowerCase())||p.slug.includes(productFilter))&&(!onlyMissingImages||!p.product_images?.length)).map(product=><article key={product.id}><div><b>{product.name}</b><small>{product.slug} · {categories.find(c=>c.id===product.category_id)?.name||'Sin categoría'} · {statuses.find(s=>s[0]===product.status)?.[1]||product.status} · {product.product_images?.length?'Fotografía guardada':'SIN FOTOGRAFÍA'}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editProduct(product)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteProduct(product)} aria-label={`Eliminar ${product.name}`}><Trash2 size={15}/></button></div></article>)}</div>
     </section>
     <section className="admin-card" id="combo-editor"><div className="admin-section-title"><div><h2>Combos y promociones</h2><p>{combos.filter(c=>c.name.toLowerCase().includes(comboFilter.toLowerCase())).length} de {combos.length} combos</p></div><button type="button" className="refresh" onClick={()=>{resetCombo();setShowComboModal(true)}}><Plus size={14}/> Nuevo combo</button></div>
       {showComboModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetCombo()}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>{comboEditing?'Editar combo':'Nuevo combo o promoción'}</h3><button type="button" className="danger-button" onClick={resetCombo}><X size={18}/></button></div><form className="admin-product-form" onSubmit={saveCombo}><h3>{comboEditing?'Modificar combo':'Crear combo o promoción'}</h3>
@@ -451,7 +489,7 @@ export default function AdminApp() {
         <div className="wide"><h4>Productos incluidos y cantidades</h4><div className="combo-item-editor">{products.filter(p=>p.status!=='hidden').map(p=><label key={p.id}>{p.name}<input type="number" min="0" step="0.01" placeholder="0 = no incluir" value={comboItems[p.id]||''} onChange={e=>setComboItems({...comboItems,[p.id]:e.target.value})}/></label>)}</div></div>
         <div className="wide price-editor"><h4>Precio promocional independiente por tarifa</h4><p>Estos precios son propios del combo, no se calculan sumando los productos.</p><div className="price-grid">{options.map(o=><label key={o.id}>{o.display_name}<input inputMode="decimal" placeholder="Precio pendiente" value={comboPrices[o.id]||''} onChange={e=>setComboPrices({...comboPrices,[o.id]:e.target.value})}/></label>)}</div></div>
         <label>Inicio de promoción (opcional)<input type="datetime-local" value={promoStart} onChange={e=>setPromoStart(e.target.value)}/></label><label>Fin de promoción (opcional)<input type="datetime-local" value={promoEnd} onChange={e=>setPromoEnd(e.target.value)}/></label>
-        <label className="wide image-upload"><ImagePlus size={18}/> Imagen del combo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setComboImage(e.target.files?.[0]||null)}/><small>{comboImage?`Seleccionada: ${comboImage.name} · Se guardará al pulsar Guardar.`:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
+        <label className="wide image-upload"><ImagePlus size={18}/> Imagen del combo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setComboImage(e.target.files?.[0]||null)}/><small>{comboImage?`Nueva fotografía seleccionada: ${comboImage.name}`:existingComboImage?'Fotografía guardada actualmente.':'Sin fotografía guardada.'} · JPG, PNG o WebP · Máximo 5 MB.</small>{comboImage&&<img className="admin-image-preview" src={URL.createObjectURL(comboImage)} alt="Vista previa del combo"/>}{!comboImage&&existingComboImage&&supabase&&<img className="admin-image-preview" src={supabase.storage.from('world-tree-products').getPublicUrl(existingComboImage).data.publicUrl} alt="Fotografía actual del combo"/>}{comboEditing&&existingComboImage&&<button type="button" className="danger-button" onClick={()=>setRemoveComboImage(true)}>Quitar fotografía actual</button>}</label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':comboEditing?'Guardar cambios':'Crear combo'}</button>{comboEditing&&<button type="button" className="refresh" onClick={resetCombo}>Cancelar edición</button>}</div>
       </form></section></div>}
       <div className="admin-filters"><label>Buscar combo<input type="text" value={comboFilter} onChange={e=>setComboFilter(e.target.value)} placeholder="Buscar por nombre o slug"/></label></div>
