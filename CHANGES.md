@@ -15,3 +15,10 @@
 - Los errores distinguen entre fallo de Storage y fallo de escritura/verificación en la base de datos.
 - Se agrega filtro de productos sin fotografía.
 - Se incorpora migración `0004_image_storage_repair.sql` para reestablecer las políticas de Storage y de las tablas de imágenes.
+
+## Combos de Susana A-E
+- Se añadió la migración `supabase/migrations/0005_susana_combos.sql` para incorporar los cinco combos publicados, sus composiciones y sus precios manuales.
+- La migración reutiliza productos por `slug` y crea únicamente los que falten, evitando duplicar los existentes.
+- Los combos se guardan en `combos`, `combo_items` y `combo_prices`, por lo que siguen siendo editables desde el administrador.
+- Se añadieron las modalidades Guyana (DGY) y Western Union a la selección de precios de la tienda, sin alterar las modalidades anteriores.
+- La migración es idempotente para la importación inicial, pero si se ejecuta otra vez después de editar los combos, restaura sus cantidades y precios originales.
