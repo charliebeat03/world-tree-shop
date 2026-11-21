@@ -161,15 +161,32 @@ export default function AdminApp() {
       const path = `${productId}/${crypto.randomUUID()}.${extension}`
       const {error:uploadError} = await supabase.storage.from('world-tree-products').upload(path,imageFile,{upsert:false,contentType:imageFile.type})
       if (uploadError) { setError(`Producto guardado, pero falló la imagen: ${uploadError.message}`); setBusy(false); await refresh(); return }
-      const {data:oldImages} = await supabase.from('product_images').select('storage_path').eq('product_id',productId)
+      const {data:oldImages,error:oldImagesError} = await supabase.from('product_images').select('storage_path').eq('product_id',productId)
+      if (oldImagesError) {
+        await supabase.storage.from('world-tree-products').remove([path])
+        setError(`La imagen se cargó, pero no se pudieron consultar las imágenes anteriores: ${oldImagesError.message}`)
+        setBusy(false); return
+      }
       const {error:imageRowError} = await supabase.from('product_images').insert({product_id:productId,storage_path:path,alt_text:name.trim(),sort_order:0})
-      if (imageRowError) setError(`Imagen subida, pero no se pudo asociar: ${imageRowError.message}`)
-      else if (oldImages?.length) {
-        await supabase.from('product_images').delete().eq('product_id',productId).neq('storage_path',path)
-        await supabase.storage.from('world-tree-products').remove(oldImages.map(i=>i.storage_path))
+      if (imageRowError) {
+        await supabase.storage.from('world-tree-products').remove([path])
+        setError(`La imagen se cargó, pero no se pudo vincular al producto: ${imageRowError.message}. No se confirmó el cambio de imagen.`)
+        setBusy(false); return
+      }
+      if (oldImages?.length) {
+        const {error:oldRowsError} = await supabase.from('product_images').delete().eq('product_id',productId).neq('storage_path',path)
+        if (oldRowsError) {
+          setError(`La nueva imagen quedó vinculada, pero no se pudieron retirar las referencias anteriores: ${oldRowsError.message}`)
+          setBusy(false); await refresh(); return
+        }
+        const {error:oldFilesError} = await supabase.storage.from('world-tree-products').remove(oldImages.map(i=>i.storage_path))
+        if (oldFilesError) {
+          setError(`La imagen nueva quedó guardada, pero no se pudieron borrar algunos archivos antiguos: ${oldFilesError.message}`)
+          setBusy(false); await refresh(); return
+        }
       }
     }
-    if (!error) setNotice(editing ? 'Producto actualizado.' : 'Producto creado.')
+    setNotice(imageFile ? (editing ? 'Producto e imagen actualizados correctamente.' : 'Producto e imagen guardados correctamente.') : (editing ? 'Producto actualizado correctamente.' : 'Producto creado correctamente.'))
     resetForm(); await refresh(); setBusy(false)
   }
 
@@ -284,15 +301,26 @@ export default function AdminApp() {
       const path=`combos/${id}/${crypto.randomUUID()}.${ext}`
       const {error:uploadError}=await supabase.storage.from('world-tree-products').upload(path,comboImage,{contentType:comboImage.type})
       if(uploadError){setError(`Combo guardado, pero falló la imagen: ${uploadError.message}`);setBusy(false);await refresh();return}
-      const {data:oldImages}=await supabase.from('combo_images').select('storage_path').eq('combo_id',id)
+      const {data:oldImages,error:oldImagesError}=await supabase.from('combo_images').select('storage_path').eq('combo_id',id)
+      if(oldImagesError){
+        await supabase.storage.from('world-tree-products').remove([path])
+        setError(`La imagen se cargó, pero no se pudieron consultar las imágenes anteriores: ${oldImagesError.message}`)
+        setBusy(false);return
+      }
       const {error:imageError}=await supabase.from('combo_images').insert({combo_id:id,storage_path:path,alt_text:comboName.trim(),sort_order:0})
-      if(imageError)setError(`Imagen subida, pero no asociada: ${imageError.message}`)
-      else if(oldImages?.length){
-        await supabase.from('combo_images').delete().eq('combo_id',id).neq('storage_path',path)
-        await supabase.storage.from('world-tree-products').remove(oldImages.map((i:any)=>i.storage_path))
+      if(imageError){
+        await supabase.storage.from('world-tree-products').remove([path])
+        setError(`La imagen se cargó, pero no se pudo vincular al combo: ${imageError.message}. No se confirmó el cambio de imagen.`)
+        setBusy(false);return
+      }
+      if(oldImages?.length){
+        const {error:oldRowsError}=await supabase.from('combo_images').delete().eq('combo_id',id).neq('storage_path',path)
+        if(oldRowsError){setError(`La nueva imagen quedó vinculada, pero no se pudieron retirar las referencias anteriores: ${oldRowsError.message}`);setBusy(false);await refresh();return}
+        const {error:oldFilesError}=await supabase.storage.from('world-tree-products').remove(oldImages.map((i:any)=>i.storage_path))
+        if(oldFilesError){setError(`La imagen nueva quedó guardada, pero no se pudieron borrar algunos archivos antiguos: ${oldFilesError.message}`);setBusy(false);await refresh();return}
       }
     }
-    setNotice(comboEditing?'Combo actualizado.':'Combo creado.')
+    setNotice(comboImage ? (comboEditing?'Combo e imagen actualizados correctamente.':'Combo e imagen guardados correctamente.') : (comboEditing?'Combo actualizado correctamente.':'Combo creado correctamente.'))
     resetCombo(); await refresh(); setBusy(false)
   }
 
@@ -409,7 +437,7 @@ export default function AdminApp() {
         <label>Disponibilidad<select value={status} onChange={e=>setStatus(e.target.value)}>{statuses.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
         <label className="wide">Descripción<textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
         <div className="wide price-editor"><h4>Precios por tarifa</h4><p>Deja vacío el precio que todavía no esté disponible. No se calcula ni convierte automáticamente.</p><div className="price-grid">{options.map(o=><label key={o.id}>{o.display_name}<input inputMode="decimal" placeholder="Precio pendiente" value={prices[o.id]||''} onChange={e=>setPrices({...prices,[o.id]:e.target.value})}/></label>)}</div></div>
-        <label className="wide image-upload"><ImagePlus size={18}/> Fotografía del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)}/><small>{imageFile?imageFile.name:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
+        <label className="wide image-upload"><ImagePlus size={18}/> Fotografía del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)}/><small>{imageFile?`Seleccionada: ${imageFile.name} · Se guardará al pulsar Guardar.`:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':editing?'Guardar cambios':'Crear producto'}</button>{editing&&<button type="button" className="refresh" onClick={resetForm}><X size={15}/> Cancelar edición</button>}</div>
       </form></section></div>}
       <div className="admin-product-list">{products.filter(p=>p.name.toLowerCase().includes(productFilter.toLowerCase())||p.slug.includes(productFilter)).map(product=><article key={product.id}><div><b>{product.name}</b><small>{product.slug} · {categories.find(c=>c.id===product.category_id)?.name||'Sin categoría'} · {statuses.find(s=>s[0]===product.status)?.[1]||product.status}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editProduct(product)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteProduct(product)} aria-label={`Eliminar ${product.name}`}><Trash2 size={15}/></button></div></article>)}</div>
@@ -423,7 +451,7 @@ export default function AdminApp() {
         <div className="wide"><h4>Productos incluidos y cantidades</h4><div className="combo-item-editor">{products.filter(p=>p.status!=='hidden').map(p=><label key={p.id}>{p.name}<input type="number" min="0" step="0.01" placeholder="0 = no incluir" value={comboItems[p.id]||''} onChange={e=>setComboItems({...comboItems,[p.id]:e.target.value})}/></label>)}</div></div>
         <div className="wide price-editor"><h4>Precio promocional independiente por tarifa</h4><p>Estos precios son propios del combo, no se calculan sumando los productos.</p><div className="price-grid">{options.map(o=><label key={o.id}>{o.display_name}<input inputMode="decimal" placeholder="Precio pendiente" value={comboPrices[o.id]||''} onChange={e=>setComboPrices({...comboPrices,[o.id]:e.target.value})}/></label>)}</div></div>
         <label>Inicio de promoción (opcional)<input type="datetime-local" value={promoStart} onChange={e=>setPromoStart(e.target.value)}/></label><label>Fin de promoción (opcional)<input type="datetime-local" value={promoEnd} onChange={e=>setPromoEnd(e.target.value)}/></label>
-        <label className="wide image-upload"><ImagePlus size={18}/> Imagen del combo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setComboImage(e.target.files?.[0]||null)}/><small>{comboImage?comboImage.name:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
+        <label className="wide image-upload"><ImagePlus size={18}/> Imagen del combo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setComboImage(e.target.files?.[0]||null)}/><small>{comboImage?`Seleccionada: ${comboImage.name} · Se guardará al pulsar Guardar.`:'JPG, PNG o WebP. Máximo 5 MB.'}</small></label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':comboEditing?'Guardar cambios':'Crear combo'}</button>{comboEditing&&<button type="button" className="refresh" onClick={resetCombo}>Cancelar edición</button>}</div>
       </form></section></div>}
       <div className="admin-filters"><label>Buscar combo<input type="text" value={comboFilter} onChange={e=>setComboFilter(e.target.value)} placeholder="Buscar por nombre o slug"/></label></div>
