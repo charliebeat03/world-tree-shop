@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase, supabaseConfigured } from './lib_supabase'
-import { ArrowLeft, LogOut, PackagePlus, RefreshCw, ShieldCheck, Pencil, Trash2, ImagePlus, MapPin, Tags, X, Plus } from 'lucide-react'
+import { ArrowLeft, LogOut, PackagePlus, RefreshCw, ShieldCheck, Pencil, Trash2, ImagePlus, MapPin, Tags, X, Plus, Eye, EyeOff, Search, Minus } from 'lucide-react'
+import { matchesSearch } from './search'
 
-type ProductRow = { id:string; name:string; slug:string; description:string; status:string; category_id:string; product_images?:{storage_path:string;alt_text:string;sort_order:number}[] }
+type ProductRow = { id:string; name:string; slug:string; description:string; status:string; category_id:string; product_prices?:{amount:number|string}[]; product_images?:{storage_path:string;alt_text:string;sort_order:number}[] }
 type CategoryRow = { id:string; name:string }
 type PriceOption = { id:string; code:string; display_name:string; is_active:boolean }
 type Province = { id:string; name:string; is_enabled:boolean }
@@ -31,6 +32,7 @@ async function normalizeImage(file:File):Promise<File> {
 export default function AdminApp() {
   const [email,setEmail] = useState('')
   const [password,setPassword] = useState('')
+  const [showPassword,setShowPassword] = useState(false)
   const [authorized,setAuthorized] = useState(false)
   const [busy,setBusy] = useState(false)
   const [error,setError] = useState('')
@@ -48,7 +50,7 @@ export default function AdminApp() {
   const [prices,setPrices] = useState<Record<string,string>>({}); const [imageFile,setImageFile] = useState<File|null>(null); const [existingProductImage,setExistingProductImage] = useState<string|null>(null); const [removeProductImage,setRemoveProductImage] = useState(false); const [imageProgress,setImageProgress] = useState(''); const [editing,setEditing] = useState<string|null>(null)
   const [comboEditing,setComboEditing] = useState<string|null>(null); const [comboName,setComboName] = useState(''); const [comboSlug,setComboSlug] = useState('')
   const [comboDescription,setComboDescription] = useState(''); const [comboStatus,setComboStatus] = useState('available')
-  const [comboPrices,setComboPrices] = useState<Record<string,string>>({}); const [comboItems,setComboItems] = useState<Record<string,string>>({})
+  const [comboPrices,setComboPrices] = useState<Record<string,string>>({}); const [comboItems,setComboItems] = useState<Record<string,string>>({}); const [comboProductSearch,setComboProductSearch] = useState('')
   const [comboImage,setComboImage] = useState<File|null>(null); const [existingComboImage,setExistingComboImage] = useState<string|null>(null); const [removeComboImage,setRemoveComboImage] = useState(false); const [promoStart,setPromoStart] = useState(''); const [promoEnd,setPromoEnd] = useState('')
   const [newCategory,setNewCategory] = useState(''); const [editingCategory,setEditingCategory] = useState<string|null>(null); const [editingCategoryName,setEditingCategoryName] = useState('')
   const [newProvince,setNewProvince] = useState(''); const [newMunicipality,setNewMunicipality] = useState(''); const [selectedProvince,setSelectedProvince] = useState('')
@@ -65,7 +67,7 @@ export default function AdminApp() {
     if (!supabase) return
     setBusy(true); setError('')
     const [p,c,o,pr,mu,co] = await Promise.all([
-      supabase.from('products').select('id,name,slug,description,status,category_id,product_images(storage_path,alt_text,sort_order)').order('created_at',{ascending:false}),
+      supabase.from('products').select('id,name,slug,description,status,category_id,product_prices(amount),product_images(storage_path,alt_text,sort_order)').order('created_at',{ascending:false}),
       supabase.from('categories').select('id,name').order('sort_order'),
       supabase.from('pricing_options').select('id,code,display_name,is_active').order('sort_order'),
       supabase.from('provinces').select('id,name,is_enabled').order('sort_order'),
@@ -142,6 +144,8 @@ export default function AdminApp() {
     if (!supabase || !name.trim() || !categoryId) return
     if (imageFile && imageFile.size > 5 * 1024 * 1024) { setError('La imagen no puede superar 5 MB.'); return }
     if (imageFile && !['image/jpeg','image/png','image/webp'].includes(imageFile.type)) { setError('Formato no válido. Usa JPG, PNG o WebP.'); return }
+    const hasInvalidPrice=options.some(option=>{const raw=prices[option.id]?.trim();return Boolean(raw)&&(!/^\d+(?:[.,]\d+)?$/.test(raw!)||!Number.isFinite(Number(raw!.replace(',','.')))||Number(raw!.replace(',','.'))<0)})
+    if(hasInvalidPrice){setError('Revisa los precios: introduce solo números positivos o cero, con un único separador decimal.');return}
     setBusy(true); setError(''); setNotice('')
     const safeSlug = slugify(slug || name)
     if (!safeSlug) { setError('Escribe un nombre válido para el identificador URL.'); setBusy(false); return }
@@ -269,7 +273,7 @@ export default function AdminApp() {
   }
 
   function resetCombo() {
-    setComboEditing(null); setComboName(''); setComboSlug(''); setComboDescription('')
+    setComboEditing(null); setComboName(''); setComboSlug(''); setComboDescription(''); setComboProductSearch('')
     setComboStatus('available'); setComboPrices(emptyPrice(options)); setComboItems({})
     setComboImage(null); setExistingComboImage(null); setRemoveComboImage(false); setPromoStart(''); setPromoEnd(''); setShowComboModal(false)
   }
@@ -286,7 +290,7 @@ export default function AdminApp() {
     for (const row of priceResult.data || []) nextPrices[row.pricing_option_id] = String(row.amount)
     const nextItems:Record<string,string> = {}
     for (const row of itemResult.data || []) nextItems[row.product_id] = String(row.quantity)
-    setComboEditing(combo.id); setComboName(combo.name); setComboSlug(combo.slug)
+    setComboEditing(combo.id); setComboName(combo.name); setComboSlug(combo.slug); setComboProductSearch('')
     setComboDescription(combo.description || ''); setComboStatus(combo.status)
     setComboPrices(nextPrices); setComboItems(nextItems)
     setPromoStart(combo.starts_at ? combo.starts_at.slice(0,16) : '')
@@ -300,8 +304,15 @@ export default function AdminApp() {
     if (!supabase || !comboName.trim()) return
     if (comboImage && comboImage.size > 5 * 1024 * 1024) { setError('La imagen del combo no puede superar 5 MB.'); return }
     if (comboImage && !['image/jpeg','image/png','image/webp'].includes(comboImage.type)) { setError('Formato no válido. Usa JPG, PNG o WebP.'); return }
-    const items = (Object.entries(comboItems) as [string,string][]).filter(([,q])=>q.trim() && Number(q)>0)
-    if (!items.length) { setError('Añade al menos un producto al combo y define su cantidad.'); return }
+    const enteredItems=(Object.entries(comboItems) as [string,string][]).filter(([,quantity])=>quantity.trim())
+    const invalidQuantity=enteredItems.some(([,quantity])=>!/^\d+(?:[.,]\d+)?$/.test(quantity)||!Number.isFinite(Number(quantity.replace(',','.')))||Number(quantity.replace(',','.'))<=0)
+    if(invalidQuantity){setError('Revisa las cantidades: deben ser números mayores que cero.');return}
+    const unavailableSelection=enteredItems.some(([productId])=>!comboEligibleProducts.some(product=>product.id===productId))
+    if(unavailableSelection){setError('El combo contiene productos que ya no están disponibles o no tienen precio. Retíralos de la selección antes de guardar.');return}
+    const items=enteredItems
+    if (!items.length) { setError('Añade al menos un producto disponible, con precio registrado, y define su cantidad.'); return }
+    const hasInvalidComboPrice=options.some(option=>{const raw=comboPrices[option.id]?.trim();return Boolean(raw)&&(!/^\d+(?:[.,]\d+)?$/.test(raw!)||!Number.isFinite(Number(raw!.replace(',','.')))||Number(raw!.replace(',','.'))<0)})
+    if(hasInvalidComboPrice){setError('Revisa los precios del combo: introduce solo números positivos o cero, con un único separador decimal.');return}
     if (promoStart && promoEnd && new Date(promoEnd)<=new Date(promoStart)) { setError('La fecha final debe ser posterior a la inicial.'); return }
     setBusy(true); setError(''); setNotice('')
     const payload = {name:comboName.trim(),slug:slugify(comboSlug||comboName),description:comboDescription.trim(),status:comboStatus,
@@ -317,7 +328,7 @@ export default function AdminApp() {
     }
     const {error:itemDeleteError}=await supabase.from('combo_items').delete().eq('combo_id',id)
     if (itemDeleteError) {setError(itemDeleteError.message);setBusy(false);return}
-    const {error:itemInsertError}=await supabase.from('combo_items').insert(items.map(([product_id,q])=>({combo_id:id,product_id,quantity:Number(q)})))
+    const {error:itemInsertError}=await supabase.from('combo_items').insert(items.map(([product_id,q])=>({combo_id:id,product_id,quantity:Number(q.replace(',','.'))})))
     if (itemInsertError) {setError(itemInsertError.message);setBusy(false);return}
     const {error:priceDeleteError}=await supabase.from('combo_prices').delete().eq('combo_id',id)
     if (priceDeleteError) {setError(priceDeleteError.message);setBusy(false);return}
@@ -452,13 +463,22 @@ export default function AdminApp() {
     setBusy(false)
   }
 
+  const comboEligibleProducts=products.filter(product=>
+    product.status==='available' &&
+    (product.product_prices||[]).some(price=>Number.isFinite(Number(price.amount)) && Number(price.amount)>=0)
+  )
+  const filteredComboProducts=comboEligibleProducts.filter(product=>
+    matchesSearch(comboProductSearch,[product.name,product.slug])
+  )
+  const selectedComboEntries=Object.entries(comboItems).filter(([,quantity])=>Number(quantity)>0)
+
   async function logout() { if (supabase) await supabase.auth.signOut(); setAuthorized(false) }
 
   if (!supabaseConfigured) return <main className="admin-page"><a href="/" className="back-link"><ArrowLeft size={16}/> Volver a la tienda</a><section className="admin-card"><ShieldCheck size={34}/><h1>Configurar World Tree</h1><p>El panel necesita un proyecto Supabase. Copia <code>.env.example</code> a <code>.env.local</code> y añade la URL y la clave publishable.</p><p className="admin-warning">No introduzcas una clave service_role en el navegador. La cuenta propietaria debe crearse en Supabase Auth y añadirse a admin_users mediante un proceso de confianza.</p></section></main>
 
-  if (!authorized) return <main className="admin-page"><a href="/" className="back-link"><ArrowLeft size={16}/> Volver a la tienda</a><form className="admin-card" onSubmit={login}><div className="admin-emblem"><ShieldCheck/></div><span className="eyebrow">WORLD TREE · ADMINISTRACIÓN</span><h1>Acceso privado</h1><p>Inicia sesión con la cuenta autorizada por la propietaria.</p><label>Correo electrónico<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Contraseña<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error && <p className="admin-error">{error}</p>}<button className="send-order" disabled={busy}>{busy?'Comprobando…':'Iniciar sesión'}</button><small>No existe registro público de cuentas.</small></form></main>
+  if (!authorized) return <main className="admin-page"><a href="/" className="back-link"><ArrowLeft size={16}/> Volver a la tienda</a><form className="admin-card" onSubmit={login}><div className="admin-emblem"><ShieldCheck/></div><span className="eyebrow">WORLD TREE · ADMINISTRACIÓN</span><h1>Acceso privado</h1><p>Inicia sesión con la cuenta autorizada por la propietaria.</p><label>Correo electrónico<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Contraseña<span className="password-field"><input type={showPassword?'text':'password'} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Ocultar contraseña':'Mostrar contraseña'} aria-pressed={showPassword}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></span></label>{error && <p className="admin-error">{error}</p>}<button className="send-order" disabled={busy}>{busy?'Comprobando…':'Iniciar sesión'}</button><small>No existe registro público de cuentas.</small></form></main>
 
-  return <main className="admin-page admin-dashboard"><header className="admin-top"><div className="admin-brand-heading"><img src="/brand/world-tree-logo.jpg" alt="World Tree"/><div><span className="eyebrow">WORLD TREE</span><h1>Panel de administración</h1></div></div><p>Tu amiga podrá añadir tantos productos como necesite, sin límite impuesto por la aplicación.</p><button className="admin-logout" onClick={logout}><LogOut size={16}/> Cerrar sesión</button></header>
+  return <main className="admin-page admin-dashboard"><header className="admin-top"><div className="admin-brand-heading"><img src="/brand/world-tree-logo.jpg" alt="World Tree"/><div><span className="eyebrow">WORLD TREE</span><h1>Panel de administración</h1></div></div><p>Gestiona productos, precios, promociones y zonas de entrega desde un solo lugar.</p><button className="admin-logout" onClick={logout}><LogOut size={16}/> Cerrar sesión</button></header>
     {error && <p className="admin-error">{error}</p>}{notice && <p className="admin-notice">{notice}</p>}
     <nav className="admin-quick-nav" aria-label="Acceso rápido a secciones de administración">
       <span>Ir directamente a:</span>
@@ -478,22 +498,22 @@ export default function AdminApp() {
         <label className="wide image-upload"><ImagePlus size={18}/> Fotografía del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)}/><small>{imageFile?`Nueva fotografía seleccionada: ${imageFile.name}`:existingProductImage?'Fotografía guardada actualmente. Puedes reemplazarla o quitarla.':'Este producto no tiene fotografía guardada.'} · JPG, PNG o WebP · Máximo 5 MB.</small>{imageFile&&<img className="admin-image-preview" src={URL.createObjectURL(imageFile)} alt="Vista previa de la nueva fotografía"/>}{!imageFile&&existingProductImage&&supabase&&<img className="admin-image-preview" src={supabase.storage.from('world-tree-products').getPublicUrl(existingProductImage).data.publicUrl} alt="Fotografía actual del producto"/>}{editing&&existingProductImage&&<button type="button" className="danger-button" onClick={()=>{setExistingProductImage(null);setRemoveProductImage(true)}}>Quitar fotografía actual</button>}{imageProgress&&<small className="image-progress">{imageProgress}</small>}</label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':editing?'Guardar cambios':'Crear producto'}</button>{editing&&<button type="button" className="refresh" onClick={resetForm}><X size={15}/> Cancelar edición</button>}</div>
       </form></section></div>}
-      <div className="admin-product-list">{products.filter(p=>(p.name.toLowerCase().includes(productFilter.toLowerCase())||p.slug.includes(productFilter))&&(!onlyMissingImages||!p.product_images?.length)).map(product=><article key={product.id}><div><b>{product.name}</b><small>{product.slug} · {categories.find(c=>c.id===product.category_id)?.name||'Sin categoría'} · {statuses.find(s=>s[0]===product.status)?.[1]||product.status} · {product.product_images?.length?'Fotografía guardada':'SIN FOTOGRAFÍA'}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editProduct(product)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteProduct(product)} aria-label={`Eliminar ${product.name}`}><Trash2 size={15}/></button></div></article>)}</div>
+      <div className="admin-product-list">{products.filter(p=>matchesSearch(productFilter,[p.name,p.slug,categories.find(category=>category.id===p.category_id)?.name])&&(!onlyMissingImages||!p.product_images?.length)).map(product=><article key={product.id}><div><b>{product.name}</b><small>{product.slug} · {categories.find(c=>c.id===product.category_id)?.name||'Sin categoría'} · {statuses.find(s=>s[0]===product.status)?.[1]||product.status} · {product.product_images?.length?'Fotografía guardada':'SIN FOTOGRAFÍA'}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editProduct(product)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteProduct(product)} aria-label={`Eliminar ${product.name}`}><Trash2 size={15}/></button></div></article>)}</div>
     </section>
-    <section className="admin-card" id="combo-editor"><div className="admin-section-title"><div><h2>Combos y promociones</h2><p>{combos.filter(c=>c.name.toLowerCase().includes(comboFilter.toLowerCase())).length} de {combos.length} combos</p></div><button type="button" className="refresh" onClick={()=>{resetCombo();setShowComboModal(true)}}><Plus size={14}/> Nuevo combo</button></div>
+    <section className="admin-card" id="combo-editor"><div className="admin-section-title"><div><h2>Combos y promociones</h2><p>{combos.filter(c=>matchesSearch(comboFilter,[c.name,c.slug,c.description])).length} de {combos.length} combos</p></div><button type="button" className="refresh" onClick={()=>{resetCombo();setShowComboModal(true)}}><Plus size={14}/> Nuevo combo</button></div>
       {showComboModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetCombo()}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>{comboEditing?'Editar combo':'Nuevo combo o promoción'}</h3><button type="button" className="danger-button" onClick={resetCombo}><X size={18}/></button></div><form className="admin-product-form" onSubmit={saveCombo}><h3>{comboEditing?'Modificar combo':'Crear combo o promoción'}</h3>
         <label>Nombre<input value={comboName} onChange={e=>{setComboName(e.target.value);if(!comboEditing)setComboSlug(slugify(e.target.value))}} required/></label>
         <label>Identificador URL<input value={comboSlug} onChange={e=>setComboSlug(e.target.value)} required/></label>
         <label>Estado<select value={comboStatus} onChange={e=>setComboStatus(e.target.value)}><option value="available">Disponible</option><option value="sold_out">Agotado</option><option value="hidden">Oculto</option></select></label>
         <label className="wide">Descripción<textarea value={comboDescription} onChange={e=>setComboDescription(e.target.value)}/></label>
-        <div className="wide"><h4>Productos incluidos y cantidades</h4><div className="combo-item-editor">{products.filter(p=>p.status!=='hidden').map(p=><label key={p.id}>{p.name}<input type="number" min="0" step="0.01" placeholder="0 = no incluir" value={comboItems[p.id]||''} onChange={e=>setComboItems({...comboItems,[p.id]:e.target.value})}/></label>)}</div></div>
+        <div className="wide combo-product-picker"><div className="combo-picker-heading"><div><h4>Productos incluidos y cantidades</h4><small>Solo productos disponibles con al menos un precio registrado.</small></div><span>{selectedComboEntries.length} seleccionados</span></div><label className="combo-picker-search"><Search size={17}/><input type="search" value={comboProductSearch} onChange={e=>setComboProductSearch(e.target.value)} placeholder="Buscar producto por nombre…"/></label>{selectedComboEntries.length>0&&<div className="combo-selected-summary" aria-label="Productos seleccionados">{selectedComboEntries.map(([productId,quantity])=>{const product=products.find(item=>item.id===productId);return <span className="combo-selected-chip" key={productId}>{product?.name||'Producto no disponible'} × {quantity}<button type="button" onClick={()=>setComboItems(current=>{const next={...current};delete next[productId];return next})} aria-label={`Quitar ${product?.name||'producto'}`}><X size={13}/></button></span>})}</div>}<div className="combo-product-results">{filteredComboProducts.map(product=><div className="combo-product-option" key={product.id}><div><strong>{product.name}</strong><small>{product.slug}</small></div><div className="combo-option-controls">{comboItems[product.id]&&Number(comboItems[product.id])>0?<><button type="button" onClick={()=>setComboItems(current=>({...current,[product.id]:String(Math.max(0,Number(current[product.id]||0)-1))}))} aria-label={`Reducir cantidad de ${product.name}`}><Minus size={14}/></button><input aria-label={`Cantidad de ${product.name}`} type="number" min="0" step="0.01" value={comboItems[product.id]} onChange={e=>setComboItems({...comboItems,[product.id]:e.target.value})}/><button type="button" onClick={()=>setComboItems(current=>({...current,[product.id]:String(Number(current[product.id]||0)+1)}))} aria-label={`Aumentar cantidad de ${product.name}`}><Plus size={14}/></button></>:<button type="button" className="combo-add-product" onClick={()=>setComboItems(current=>({...current,[product.id]:'1'}))}><Plus size={14}/> Añadir</button>}</div></div>)}{filteredComboProducts.length===0&&<p className="combo-picker-empty">{comboProductSearch?'No encontramos productos con ese nombre.':'No hay productos disponibles con precio registrado.'}</p>}</div></div>
         <div className="wide price-editor"><h4>Precio promocional independiente por tarifa</h4><p>Estos precios son propios del combo, no se calculan sumando los productos.</p><div className="price-grid">{options.map(o=><label key={o.id}>{o.display_name}<input inputMode="decimal" placeholder="Precio pendiente" value={comboPrices[o.id]||''} onChange={e=>setComboPrices({...comboPrices,[o.id]:e.target.value})}/></label>)}</div></div>
         <label>Inicio de promoción (opcional)<input type="datetime-local" value={promoStart} onChange={e=>setPromoStart(e.target.value)}/></label><label>Fin de promoción (opcional)<input type="datetime-local" value={promoEnd} onChange={e=>setPromoEnd(e.target.value)}/></label>
         <label className="wide image-upload"><ImagePlus size={18}/> Imagen del combo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setComboImage(e.target.files?.[0]||null)}/><small>{comboImage?`Nueva fotografía seleccionada: ${comboImage.name}`:existingComboImage?'Fotografía guardada actualmente.':'Sin fotografía guardada.'} · JPG, PNG o WebP · Máximo 5 MB.</small>{comboImage&&<img className="admin-image-preview" src={URL.createObjectURL(comboImage)} alt="Vista previa del combo"/>}{!comboImage&&existingComboImage&&supabase&&<img className="admin-image-preview" src={supabase.storage.from('world-tree-products').getPublicUrl(existingComboImage).data.publicUrl} alt="Fotografía actual del combo"/>}{comboEditing&&existingComboImage&&<button type="button" className="danger-button" onClick={()=>setRemoveComboImage(true)}>Quitar fotografía actual</button>}</label>
         <div className="wide form-actions"><button className="send-order" disabled={busy}>{busy?'Guardando…':comboEditing?'Guardar cambios':'Crear combo'}</button>{comboEditing&&<button type="button" className="refresh" onClick={resetCombo}>Cancelar edición</button>}</div>
       </form></section></div>}
       <div className="admin-filters"><label>Buscar combo<input type="text" value={comboFilter} onChange={e=>setComboFilter(e.target.value)} placeholder="Buscar por nombre o slug"/></label></div>
-      <div className="admin-product-list">{combos.filter(c=>c.name.toLowerCase().includes(comboFilter.toLowerCase())||c.slug.includes(comboFilter)).map(c=><article key={c.id}><div><b>{c.name}</b><small>{c.slug} · {c.status}{c.starts_at?` · Desde ${new Date(c.starts_at).toLocaleString()}`:''}{c.ends_at?` · Hasta ${new Date(c.ends_at).toLocaleString()}`:''}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editCombo(c)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCombo(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></article>)}</div>
+      <div className="admin-product-list">{combos.filter(c=>matchesSearch(comboFilter,[c.name,c.slug,c.description])).map(c=><article key={c.id}><div><b>{c.name}</b><small>{c.slug} · {c.status}{c.starts_at?` · Desde ${new Date(c.starts_at).toLocaleString()}`:''}{c.ends_at?` · Hasta ${new Date(c.ends_at).toLocaleString()}`:''}</small></div><div className="row-actions"><button className="refresh" onClick={()=>editCombo(c)}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCombo(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></article>)}</div>
     </section>
     <section className="admin-card" id="category-editor"><div className="admin-section-title"><div><h2><Tags size={19}/> Categorías</h2><p>{categories.length} categorías registradas</p></div><button type="button" className="refresh" onClick={()=>setShowCategoryModal(true)}><Plus size={14}/> Gestionar categorías</button></div>{showCategoryModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowCategoryModal(false)}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>Gestionar categorías</h3><button type="button" className="danger-button" onClick={()=>setShowCategoryModal(false)}><X size={18}/></button></div><p>Añade, edita o elimina categorías.</p><form className="inline-admin-form" onSubmit={addCategory}><input value={newCategory} onChange={e=>setNewCategory(e.target.value)} placeholder="Nueva categoría" required/><button className="refresh" disabled={busy}>Añadir</button></form><div className="admin-category-list">{categories.map(c=><div className="admin-category-row" key={c.id}>{editingCategory===c.id ? <><input value={editingCategoryName} onChange={e=>setEditingCategoryName(e.target.value)}/><button className="refresh" onClick={()=>saveCategoryEdit(c)} disabled={busy}>Guardar</button><button className="refresh" onClick={()=>setEditingCategory(null)}>Cancelar</button></> : <><b>{c.name}</b><div className="row-actions"><button className="refresh" onClick={()=>{setEditingCategory(c.id);setEditingCategoryName(c.name)}}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCategory(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></>}</div>)}</div></section></div>}</section>
     <section className="admin-card" id="delivery-zones"><div className="admin-section-title"><div><h2><MapPin size={19}/> Zonas de entrega</h2><p>Gestiona provincias y municipios.</p></div><button type="button" className="refresh" onClick={()=>setShowZonesModal(true)}><Plus size={14}/> Gestionar zonas</button></div>{showZonesModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowZonesModal(false)}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>Zonas de entrega</h3><button type="button" className="danger-button" onClick={()=>setShowZonesModal(false)}><X size={18}/></button></div><p>Inicialmente Santiago de Cuba y sus municipios. Las provincias nuevas se crean deshabilitadas hasta que la propietaria decida ofrecer entregas allí.</p>

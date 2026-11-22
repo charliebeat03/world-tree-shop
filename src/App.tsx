@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Search, ShoppingBag, Plus, Minus, X, TreePine, ArrowRight, ShieldCheck, MapPin, Clock3, RefreshCw, Gift } from 'lucide-react'
 import { supabase, supabaseConfigured } from './lib_supabase'
+import { matchesSearch, normalizeSearch } from './search'
 
 type Tariff = 'Zelle'|'IBAN'|'Bizum'|'Posta'|'Reales'|'MXN'|'PDO'|'Rublos'|'Guyana'|'Western'
 type Category = { id:string; name:string }
@@ -15,8 +16,20 @@ const tariffs:Tariff[]=['Zelle','IBAN','Bizum','Posta','Reales','MXN','PDO','Rub
 const waNumber=import.meta.env.VITE_WHATSAPP_NUMBER||'5353526551'
 const fallbackMunicipalities=['Santiago de Cuba','Contramaestre','Palma Soriano','San Luis','Songo-La Maya','Segundo Frente','Tercer Frente','Guamá','Mella']
 const money=(n:number,t:Tariff)=>`${n.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})} ${t}`
-// Normaliza acentos y mayúsculas para que 'frijoles' encuentre 'fríjoles'.
-const normalizeSearch=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase().trim()
+function validateCubanIdentityCard(value:string):boolean {
+  if (!/^\d{11}$/.test(value)) return false
+  const yearPart=Number(value.slice(0,2)), month=Number(value.slice(2,4)), day=Number(value.slice(4,6))
+  if(month<1||month>12||day<1||day>31)return false
+  return [1900+yearPart,2000+yearPart].some(year=>{
+    const date=new Date(year,month-1,day)
+    return date.getFullYear()===year && date.getMonth()===month-1 && date.getDate()===day
+  })
+}
+
+function validateCubanRecipientPhone(value:string):boolean {
+  // Número móvil cubano nacional: ocho dígitos, con prefijo móvil 5 o 63.
+  return /^(?:5\d{7}|63\d{6})$/.test(value)
+}
 
 export default function App(){
  const [tariff,setTariff]=useState<Tariff>(()=>{const saved=localStorage.getItem('worldtree-tariff');return tariffs.includes(saved as Tariff)?saved as Tariff:'Zelle'})
@@ -35,6 +48,7 @@ export default function App(){
  const [catalogMode,setCatalogMode]=useState<'products'|'combos'>('products')
   const [toast,setToast]=useState<{msg:string;ts:number}|null>(null)
   const [justAdded,setJustAdded]=useState<string|null>(null)
+  const restoreScrollRef=useRef<number|null>(null)
 
   // Keep the page behind the cart from scrolling while the cart drawer is open.
   useEffect(()=>{
@@ -53,6 +67,13 @@ export default function App(){
    }
   },[showCart])
 
+  useLayoutEffect(()=>{
+    if(restoreScrollRef.current!==null){
+      const top=restoreScrollRef.current
+      restoreScrollRef.current=null
+      window.scrollTo({top,behavior:'instant'})
+    }
+  },[cart])
   useEffect(()=>{localStorage.setItem('worldtree-tariff',tariff)},[tariff])
  useEffect(()=>{
   let active=true
@@ -76,35 +97,39 @@ export default function App(){
  },[])
 
  const selectedMunicipalities=zones.filter(z=>z.provinces?.name==='Santiago de Cuba').map(z=>z.name)
- // La búsqueda no distingue tildes, mayúsculas ni espacios sobrantes.
+ // Búsqueda flexible: ignora tildes, mayúsculas y pequeños errores tipográficos.
  const normalizedQuery=normalizeSearch(query)
- const visibleProducts=useMemo(()=>products.filter(p=>
-   (category==='Todos'||p.categories?.name===category)&&
-   (!normalizedQuery||[p.name,p.description||'',p.categories?.name||''].some(value=>normalizeSearch(value).includes(normalizedQuery)))
- ),[products,category,normalizedQuery])
- // En la pestaña de combos, buscar un producto devuelve los combos que lo contienen,
- // nunca una tarjeta individual del producto buscado.
- const visibleCombos=useMemo(()=>combos.filter(c=>
-   !normalizedQuery||
-   normalizeSearch(c.name).includes(normalizedQuery)||
-   normalizeSearch(c.description||'').includes(normalizedQuery)||
-   c.combo_items.some(item=>item.products&&(
-     normalizeSearch(item.products.name).includes(normalizedQuery)||
-     normalizeSearch(item.products.description||'').includes(normalizedQuery)
-   ))
- ),[combos,normalizedQuery])
  const activeTariff=tariff
- const productPrice=(p:ProductRow)=>{const row=p.product_prices.find(x=>x.pricing_options?.code===activeTariff);return row?Number(row.amount):undefined}
- const comboPrice=(c:ComboRow)=>{const row=c.combo_prices.find(x=>x.pricing_options?.code===activeTariff);return row?Number(row.amount):undefined}
+ const productPrice=(p:ProductRow)=>{const row=p.product_prices.find(x=>x.pricing_options?.code===activeTariff);if(!row)return undefined;const amount=Number(row.amount);return Number.isFinite(amount)&&amount>=0?amount:undefined}
+ const comboPrice=(c:ComboRow)=>{const row=c.combo_prices.find(x=>x.pricing_options?.code===activeTariff);if(!row)return undefined;const amount=Number(row.amount);return Number.isFinite(amount)&&amount>=0?amount:undefined}
+ const visibleProducts=useMemo(()=>products.filter(p=>
+   (p.status==='available'||p.status==='sold_out') &&
+   productPrice(p)!==undefined &&
+   (category==='Todos'||p.categories?.name===category)&&
+   matchesSearch(normalizedQuery,[p.name,p.description,p.categories?.name])
+ ),[products,category,normalizedQuery,tariff])
+ // En la pestaña de combos, buscar también los productos que contiene cada combo.
+ const visibleCombos=useMemo(()=>combos.filter(c=>
+   (c.status==='available'||c.status==='sold_out') &&
+   comboPrice(c)!==undefined &&
+   matchesSearch(normalizedQuery,[c.name,c.description,...c.combo_items.flatMap(item=>[item.products?.name,item.products?.description])])
+ ),[combos,normalizedQuery,tariff])
  const imageUrl=(path:string)=>/^https?:\/\//i.test(path)?path:(supabase?.storage.from('world-tree-products').getPublicUrl(path).data.publicUrl||'')
- const subtotal=cart.reduce((s,l)=>s+(l.price||0)*l.quantity,0)
- const missingPrice=cart.some(l=>l.price===undefined)
+ const currentCart=cart.map(line=>{
+  const source=line.kind==='product'?products.find(product=>product.id===line.id):combos.find(combo=>combo.id===line.id)
+  const price=source?(line.kind==='product'?productPrice(source as ProductRow):comboPrice(source as ComboRow)):undefined
+  return {...line,price}
+ })
+ const subtotal=currentCart.reduce((sum,line)=>sum+(line.price||0)*line.quantity,0)
+ const missingPrice=currentCart.some(line=>line.price===undefined)
  const showToast=(msg:string)=>{setToast({msg,ts:Date.now()});setTimeout(()=>setToast(null),2200)}
-const addLine=(line:CartLine)=>{if(line.status==='sold_out'||line.price===undefined)return;setJustAdded(`${line.kind}-${line.id}`);setTimeout(()=>setJustAdded(null),600);setCart(prev=>{const old=prev.find(x=>x.id===line.id&&x.kind===line.kind);return old?prev.map(x=>x.id===line.id&&x.kind===line.kind?{...x,quantity:x.quantity+1}:x):[...prev,line]});showToast('Añadido al carrito')}
+const addLine=(line:CartLine)=>{if(line.status!=='available'||line.price===undefined)return;restoreScrollRef.current=window.scrollY;setJustAdded(`${line.kind}-${line.id}`);setTimeout(()=>setJustAdded(null),600);setCart(prev=>{const old=prev.find(x=>x.id===line.id&&x.kind===line.kind);return old?prev.map(x=>x.id===line.id&&x.kind===line.kind?{...x,quantity:x.quantity+1}:x):[...prev,line]});showToast('Añadido al carrito')}
  const changeQty=(id:string,kind:string,delta:number)=>setCart(prev=>prev.map(x=>x.id===id&&x.kind===kind?{...x,quantity:x.quantity+delta}:x).filter(x=>x.quantity>0))
  function sendOrder(){
   if(!buyer.name.trim()||!buyer.phone.trim()||!buyer.recipient.trim()||!buyer.idCard.trim()||!buyer.recipientPhone.trim()||!buyer.municipality||!buyer.address.trim()||!cart.length||missingPrice)return
-  const lines=cart.map(l=>`• ${l.name} x${l.quantity} | ${money(l.price!,tariff)} c/u`).join('\n')
+  if(!validateCubanIdentityCard(buyer.idCard)){showToast('Comprueba el carnet: debe tener 11 dígitos y una fecha válida.');return}
+  if(!validateCubanRecipientPhone(buyer.recipientPhone)){showToast('El teléfono del destinatario debe tener 8 dígitos y comenzar por 5 o 63.');return}
+  const lines=currentCart.map(l=>`• ${l.name} x${l.quantity} | ${l.price===undefined?'Precio no disponible':money(l.price,tariff)} c/u`).join('\n')
   const message=`🌳 *WORLD TREE | SOLICITUD DE PEDIDO*\n\n*Comprador:* ${buyer.name}\n*Teléfono comprador:* ${buyer.phone}\n\n*Destinatario en Cuba:* ${buyer.recipient}\n*Carnet de identidad:* ${buyer.idCard}\n*Teléfono destinatario:* ${buyer.recipientPhone}\n*Provincia:* Santiago de Cuba\n*Municipio:* ${buyer.municipality}\n*Dirección:* ${buyer.address}\n\n*Artículos:*\n${lines}\n\n*Modalidad de precio seleccionada:* ${tariff}\n*Subtotal estimado:* ${money(subtotal,tariff)}\n*Notas:* ${buyer.notes||'Ninguna'}\n\nSolicitud pendiente de confirmación personal de disponibilidad, importe final, entrega y pago.`
   window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`,'_blank','noopener,noreferrer')
  }
@@ -113,7 +138,7 @@ const addLine=(line:CartLine)=>{if(line.status==='sold_out'||line.price===undefi
 
  return <div className="site-shell">
   <div className="topline">ENTREGAS EN SANTIAGO DE CUBA · PEDIDOS POR WHATSAPP</div>
-  <header className="header"><a className="brand" href="#"><img className="brand-logo" src="/brand/world-tree-logo.jpg" alt="World Tree"/><span><strong>WORLD TREE</strong><small>TIENDA ONLINE</small></span></a><div className="header-right"><label className="tariff-select"><span>Tarifa</span><select value={tariff} onChange={e=>setTariff(e.target.value as Tariff)}>{tariffs.map(t=><option key={t} value={t}>{t==='Guyana'?'Guyana (DGY)':t==='Western'?'Western Union':t}</option>)}</select></label><button className="cart-button" onClick={()=>setShowCart(true)}><ShoppingBag size={18}/><span>Carrito</span><b>{cart.reduce((n,l)=>n+l.quantity,0)}</b></button></div></header>
+  <header className="header"><a className="brand" href="#"><img className="brand-logo" src="/brand/world-tree-logo.jpg" alt="World Tree"/><span><strong>WORLD TREE</strong><small>TIENDA ONLINE</small></span></a><div className="header-right"><label className="tariff-select"><span>Tarifa</span><select value={tariff} onChange={e=>setTariff(e.target.value as Tariff)}>{tariffs.map(t=><option key={t} value={t}>{t==='Guyana'?'Guyana (DGY)':t==='Western'?'Western Union':t}</option>)}</select></label><button className="cart-button" onClick={()=>setShowCart(true)} aria-label={`Abrir carrito, ${cart.reduce((n,l)=>n+l.quantity,0)} artículos, subtotal ${missingPrice?'hay precios pendientes':money(subtotal,tariff)}`}><ShoppingBag size={18}/><span>Carrito</span><strong className="cart-header-total">{missingPrice?'Revisar precios':money(subtotal,tariff)}</strong><b>{cart.reduce((n,l)=>n+l.quantity,0)}</b></button></div></header>
   <main>
    <section className="hero"><div className="hero-copy"><span className="eyebrow">TU MUNDO, EN UN SOLO LUGAR</span><h1>Lo que necesitas,<br/><em>más cerca de casa.</em></h1><p>Alimentos, productos para el hogar y mucho más, para quienes quieren cuidar de los suyos en Santiago de Cuba.</p><a className="primary-link" href="#catalog">Explorar catálogo <ArrowRight size={17}/></a><div className="hero-trust"><span><ShieldCheck size={16}/> Atención personalizada</span><span><MapPin size={16}/> Santiago de Cuba</span></div></div><div className="hero-art"><div className="orbit orbit-one"></div><div className="planet">🌎</div><div className="tree-crown">🌳</div><div className="gold-seal">WORLD TREE<br/><small>TIENDA ONLINE</small></div></div></section>
    <section className="service-strip"><div><MapPin/><span><b>Entrega local</b><small>Santiago de Cuba y sus municipios</small></span></div><div><Clock3/><span><b>Pedidos por encargo</b><small>Tiempo estimado: 24 a 48 horas</small></span></div><div><ShieldCheck/><span><b>Atención directa</b><small>Confirmación por WhatsApp</small></span></div></section>
@@ -126,15 +151,15 @@ const addLine=(line:CartLine)=>{if(line.status==='sold_out'||line.price===undefi
    </section>
    <section className="delivery-note"><div className="delivery-mark"><MapPin size={25}/></div><div><h2>Entregamos en Santiago de Cuba</h2><p>Los municipios disponibles se muestran al realizar la solicitud. Los repartos a municipios se coordinan para los sábados. Otras provincias estarán disponibles cuando la propietaria las habilite.</p></div></section>
   </main>
-  <footer><div className="footer-brand"><img className="footer-logo" src="/brand/world-tree-logo.jpg" alt=""/><strong>WORLD TREE</strong></div><span>Tu mundo, en un solo lugar.</span><small>Los pedidos se confirman personalmente por WhatsApp. Los precios y la disponibilidad pueden variar hasta la confirmación.</small></footer>
+  <footer><div className="footer-brand"><img className="footer-logo" src="/brand/world-tree-logo.jpg" alt=""/><strong>WORLD TREE</strong></div><span>Tu mundo, en un solo lugar.</span><small>Los pedidos se confirman personalmente por WhatsApp. Los precios y la disponibilidad pueden variar hasta la confirmación.</small><small className="footer-legal">© {new Date().getFullYear()} World Tree Shop. Todos los derechos reservados. Creado por <strong>Codexia Systems</strong>.</small></footer>
   {selectedCombo&&<div className="combo-modal-backdrop" onClick={()=>setSelectedCombo(null)}><section className="combo-modal" role="dialog" aria-modal="true" aria-labelledby="combo-modal-title" onClick={e=>e.stopPropagation()}><div className="combo-modal-head"><div><span className="eyebrow">WORLD TREE · CONTENIDO DEL COMBO</span><h2 id="combo-modal-title">{selectedCombo.name}</h2><p>{selectedCombo.description}</p></div><button className="icon-button" onClick={()=>setSelectedCombo(null)} aria-label="Cerrar detalle"><X/></button></div><div className="combo-modal-price"><span>Precio en {tariff}</span><strong>{comboPrice(selectedCombo)===undefined?'Precio pendiente':money(comboPrice(selectedCombo)!,tariff)}</strong></div><h3 className="combo-list-title">Todo lo que incluye ({selectedCombo.combo_items.length} productos)</h3><div className="combo-product-list">{[...selectedCombo.combo_items].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map((item,index)=>{const product=item.products;const productImage=product?.product_images?.slice().sort((a,b)=>a.sort_order-b.sort_order)[0],productPhotoPath=productImage?.storage_path||product?.image_main;return <div className="combo-product-row" key={product?.id||index}><div className="combo-product-thumb">{productPhotoPath?<img src={imageUrl(productPhotoPath)} alt={productImage?.alt_text||product?.name||'Producto'} onError={e=>{e.currentTarget.style.display='none';const fallback=e.currentTarget.parentElement?.querySelector('.image-placeholder');if(fallback)fallback.classList.remove('image-fallback-hidden')}}/>:null}<div className={`image-placeholder ${productPhotoPath?'image-fallback-hidden':''}`}><TreePine size={23}/><span>WORLD TREE</span></div></div><div className="combo-product-info"><strong>{product?.name||'Producto'}</strong>{product?.description&&<small>{product.description}</small>}</div><span className="combo-product-quantity">× {item.quantity}</span></div>})}</div><div className="combo-modal-actions"><button className="combo-modal-add" disabled={selectedCombo.status==='sold_out'||comboPrice(selectedCombo)===undefined} onClick={()=>{addLine({id:selectedCombo.id,name:selectedCombo.name,kind:'combo',quantity:1,price:comboPrice(selectedCombo),status:selectedCombo.status});setSelectedCombo(null)}}><Plus size={17}/> Añadir combo al carrito</button><button className="combo-modal-close" onClick={()=>setSelectedCombo(null)}>Seguir viendo combos</button></div></section></div>}
   {showCart&&<div className="overlay" onClick={()=>setShowCart(false)}><section className="drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><span className="eyebrow">TU PEDIDO</span><h2 id="cart-title">Carrito</h2></div><button className="icon-button" onClick={()=>setShowCart(false)} aria-label="Cerrar"><X/></button></div>
-   {!cart.length?<div className="empty-cart"><ShoppingBag size={35}/><h3>Tu carrito está esperando</h3><p>Añade productos del catálogo para preparar la solicitud.</p></div>:<><div className="cart-lines">{cart.map(l=><div className="cart-line" key={`${l.kind}-${l.id}`}><div><b>{l.name}</b><small>{l.price===undefined?'Precio pendiente':money(l.price,tariff)} por unidad</small></div><div className="quantity"><button onClick={()=>changeQty(l.id,l.kind,-1)}><Minus size={14}/></button><span>{l.quantity}</span><button onClick={()=>changeQty(l.id,l.kind,1)}><Plus size={14}/></button></div><button className="remove" onClick={()=>setCart(prev=>prev.filter(x=>!(x.id===l.id&&x.kind===l.kind)))} aria-label="Eliminar"><X size={15}/></button></div>)}</div><div className="cart-total"><span>Subtotal estimado</span><strong>{money(subtotal,tariff)}</strong></div><p className="fineprint">Importe orientativo, sujeto a confirmación.</p>
+   {!cart.length?<div className="empty-cart"><ShoppingBag size={35}/><h3>Tu carrito está esperando</h3><p>Añade productos del catálogo para preparar la solicitud.</p></div>:<><div className="cart-lines">{currentCart.map(l=><div className="cart-line" key={`${l.kind}-${l.id}`}><div><b>{l.name}</b><small>{l.price===undefined?`Precio no disponible en ${tariff}`:money(l.price,tariff)} por unidad</small></div><div className="quantity"><button onClick={()=>changeQty(l.id,l.kind,-1)}><Minus size={14}/></button><span>{l.quantity}</span><button onClick={()=>changeQty(l.id,l.kind,1)}><Plus size={14}/></button></div><button className="remove" onClick={()=>setCart(prev=>prev.filter(x=>!(x.id===l.id&&x.kind===l.kind)))} aria-label="Eliminar"><X size={15}/></button></div>)}</div><div className="cart-total"><span>Subtotal estimado</span><strong>{missingPrice?'No disponible para esta tarifa':money(subtotal,tariff)}</strong></div><p className="fineprint">Importe orientativo, sujeto a confirmación.</p>
    <div className="order-form"><h3>Datos para coordinar la entrega</h3><p>El nombre y carnet del destinatario deben coincidir al recibir la mercancía. Estos datos se incluirán en el mensaje de WhatsApp y no se guardarán en la web.</p>
-    <label>Nombre completo del comprador *<input value={buyer.name} onChange={e=>setBuyer({...buyer,name:e.target.value})}/></label><label>Teléfono del comprador *<input value={buyer.phone} onChange={e=>setBuyer({...buyer,phone:e.target.value})}/></label><label>Nombre completo del destinatario *<input value={buyer.recipient} onChange={e=>setBuyer({...buyer,recipient:e.target.value})}/></label><label>Carnet de identidad del destinatario *<input value={buyer.idCard} onChange={e=>setBuyer({...buyer,idCard:e.target.value})} inputMode="numeric" autoComplete="off"/></label><label>Teléfono del destinatario *<input value={buyer.recipientPhone} onChange={e=>setBuyer({...buyer,recipientPhone:e.target.value})}/></label>
-    <label>Municipio *<select value={buyer.municipality} onChange={e=>setBuyer({...buyer,municipality:e.target.value})}><option value="">Selecciona municipio</option>{(selectedMunicipalities.length?selectedMunicipalities:fallbackMunicipalities).map(m=><option key={m}>{m}</option>)}</select></label>
-    <label>Dirección de entrega *<textarea value={buyer.address} onChange={e=>setBuyer({...buyer,address:e.target.value})}/></label><label>Indicaciones adicionales<textarea value={buyer.notes} onChange={e=>setBuyer({...buyer,notes:e.target.value})}/></label>
-    <button className="send-order" onClick={sendOrder} disabled={!buyer.name.trim()||!buyer.phone.trim()||!buyer.recipient.trim()||!buyer.idCard.trim()||!buyer.recipientPhone.trim()||!buyer.municipality||!buyer.address.trim()||missingPrice}>Preparar pedido en WhatsApp <ArrowRight size={17}/></button><small className="privacy-note">No se envía nada hasta que pulses Enviar en WhatsApp. El carnet es un dato personal: compártelo únicamente si aceptas incluirlo en esta solicitud.</small>
+    <label>Nombre completo del comprador *<input value={buyer.name} onChange={e=>setBuyer({...buyer,name:e.target.value})} autoComplete="name" required/></label><label>Teléfono del comprador *<input type="tel" value={buyer.phone} onChange={e=>setBuyer({...buyer,phone:e.target.value})} autoComplete="tel" required/></label><label>Nombre completo del destinatario *<input value={buyer.recipient} onChange={e=>setBuyer({...buyer,recipient:e.target.value})} required/></label><label>Carnet de identidad del destinatario *<input value={buyer.idCard} onChange={e=>setBuyer({...buyer,idCard:e.target.value.replace(/\D/g,'')})} inputMode="numeric" autoComplete="off" minLength={11} pattern="[0-9]{11}" aria-invalid={buyer.idCard.length>0&&!validateCubanIdentityCard(buyer.idCard)} placeholder="11 dígitos" aria-describedby="idcard-help" required/><small id="idcard-help" className={buyer.idCard.length>0&&!validateCubanIdentityCard(buyer.idCard)?'field-error':'field-hint'}>{buyer.idCard.length===0?'Introduce los 11 dígitos del carnet cubano.':validateCubanIdentityCard(buyer.idCard)?'Formato correcto.':'Debe contener 11 dígitos y comenzar con una fecha válida (AAMMDD).'}</small></label><label>Teléfono del destinatario en Cuba *<input type="tel" value={buyer.recipientPhone} onChange={e=>setBuyer({...buyer,recipientPhone:e.target.value.replace(/\D/g,'')})} inputMode="numeric" autoComplete="tel-national" minLength={8} pattern="(?:5[0-9]{7}|63[0-9]{6})" aria-invalid={buyer.recipientPhone.length>0&&!validateCubanRecipientPhone(buyer.recipientPhone)} placeholder="Ej. 5XXXXXXX" aria-describedby="recipient-phone-help" required/><small id="recipient-phone-help" className={buyer.recipientPhone.length>0&&!validateCubanRecipientPhone(buyer.recipientPhone)?'field-error':'field-hint'}>{buyer.recipientPhone.length===0?'8 dígitos. Debe comenzar por 5 o 63.':validateCubanRecipientPhone(buyer.recipientPhone)?'Número con formato válido.':'Revisa el número: usa 8 dígitos y comienza por 5 o 63.'}</small></label>
+    <label>Municipio *<select value={buyer.municipality} onChange={e=>setBuyer({...buyer,municipality:e.target.value})} required><option value="">Selecciona municipio</option>{(selectedMunicipalities.length?selectedMunicipalities:fallbackMunicipalities).map(m=><option key={m}>{m}</option>)}</select></label>
+    <label>Dirección de entrega *<textarea value={buyer.address} onChange={e=>setBuyer({...buyer,address:e.target.value})} required/></label><label>Indicaciones adicionales<textarea value={buyer.notes} onChange={e=>setBuyer({...buyer,notes:e.target.value})}/></label>
+    <button className="send-order" onClick={sendOrder} disabled={!buyer.name.trim()||!buyer.phone.trim()||!buyer.recipient.trim()||!validateCubanIdentityCard(buyer.idCard)||!validateCubanRecipientPhone(buyer.recipientPhone)||!buyer.municipality||!buyer.address.trim()||!cart.length||missingPrice}>Preparar pedido en WhatsApp <ArrowRight size={17}/></button><small className="privacy-note">No se envía nada hasta que pulses Enviar en WhatsApp. El carnet es un dato personal: compártelo únicamente si aceptas incluirlo en esta solicitud.</small>
    </div></>}
   </section></div>}
   {toast&&<div className="toast" style={{animationDuration:'2.5s'}}>{toast.msg}</div>}
