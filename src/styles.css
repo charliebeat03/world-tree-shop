@@ -181,3 +181,11 @@ button.added{animation:addedPulse 0.4s ease-out;transform:scale(1.05);background
 
 /* Fallback visible when a stored product image is missing or cannot be loaded. */
 .image-fallback-hidden{display:none!important}
+
+
+/* Tarjetas compactas: cada producto conserva su altura natural en móvil. */
+.product-grid{align-items:start}
+.product-card{height:fit-content;align-self:start}
+.product-body{min-width:0}
+.product-body>p:not(.combo-description){min-height:0;margin:8px 0 0}
+@media(max-width:560px){.product-body p:not(.combo-description){min-height:0}}
