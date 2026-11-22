@@ -1,98 +1,106 @@
-# World Tree v0.7 - Inventario del Proyecto
+# World Tree Shop · Inventario técnico actualizado
 
-## 1. Estructura de Carpetas y Archivos
+**Base de este inventario:** ZIP `world-tree-shop-main` proporcionado para la revisión del 22 de noviembre de 2026.
 
-```
-c:\Users\hkrey\Documents\world-tree-0.7\
+## 1. Estructura
+
+```text
+world-tree-shop-main/
+├── .env.example
+├── .gitignore
+├── CHANGES.md
+├── PROJECT_INVENTORY.md
+├── README.md
+├── TODO.md
 ├── index.html
 ├── package.json
-├── tsconfig.json
-├── tsconfig.app.json
-├── vite.config.ts
-├── .env.example
-├── README.md
-├── supabase/
-│   ├── 0001_initial_schema.sql
-│   └── 0002_security_hardening.sql
+├── pnpm-lock.yaml
 ├── public/
+│   ├── robots.txt
+│   ├── sitemap.xml
 │   └── brand/
+│       ├── README.md
 │       └── world-tree-logo.jpg
-└── src/
-    ├── main.tsx
-    ├── App.tsx
-    ├── AdminApp.tsx
-    ├── lib_supabase.ts
-    ├── data.ts
-    └── styles.css
+├── src/
+│   ├── AdminApp.tsx
+│   ├── App.tsx
+│   ├── lib_supabase.ts
+│   ├── main.tsx
+│   ├── search.ts
+│   ├── styles.css
+│   └── vite-env.d.ts
+└── supabase/
+    ├── 0001_initial_schema.sql
+    ├── 0002_security_hardening.sql
+    ├── 0003_product_image_storage.sql
+    ├── migrations/
+    │   ├── 0001_initial_schema.sql
+    │   ├── 0002_security_hardening.sql
+    │   ├── 0003_product_image_storage.sql
+    │   ├── 0004_image_storage_repair.sql
+    │   └── 0005_susana_combos.sql
+    └── seed/
+        └── 0004_import_47_products.sql
+```
 
-## 2. Tecnologías y Dependencias
+## 2. Tecnologías
 
-| Tecnología | Versión | Uso |
-|------------|---------|-----|
-| React | 19.1.1 | Framework de interfaz de usuario |
-| React DOM | 19.1.1 | Renderizado en DOM |
-| TypeScript | 5.9.2 | Tipado estático |
-| Vite | 7.1.5 | Herramienta de construcción y desarrollo |
-| @supabase/supabase-js | 2.57.4 | Cliente de Supabase para base de datos y autenticación |
-| lucide-react | 0.468.0 | Iconografía |
+| Tecnología | Versión declarada | Función |
+|---|---:|---|
+| React | 19.1.1 | Interfaz |
+| React DOM | 19.1.1 | Renderizado |
+| TypeScript | 5.9.2 | Tipado |
+| Vite | 7.1.5 | Desarrollo y build |
+| Supabase JS | 2.57.4 | Base de datos, Auth y Storage |
+| Lucide React | 0.468.0 | Iconografía |
 
-## 3. Funcionalidades Existentes
+## 3. Responsabilidad de archivos
 
-### TIENDA PÚBLICA (`src/App.tsx`)
-- Catálogo de productos con filtro por categoría y búsqueda
-- Combos y promociones con productos incluidos y precios por tarifa
-- Selección de tarifa (8 tarifas) persistida en localStorage
-- Precio pendiente cuando no hay precio para una tarifa
-- Estados de producto: available, check_availability, sold_out, hidden
-- Carrito de compras: agregar, cambiar cantidades, eliminar líneas
-- Formulario de pedido: comprador, destinatario, municipio, dirección, notas
-- WhatsApp: prepara mensaje y abre para envío manual
-- Mensaje formateado con todos los datos del pedido
-- Advertencia de privacidad sobre carnet de identidad
-- Diseño responsive mobile-first (breakpoints 800px, 480px)
+| Archivo | Responsabilidad |
+|---|---|
+| `src/App.tsx` | Catálogo, categorías, combos, carrito, validación del pedido y WhatsApp |
+| `src/AdminApp.tsx` | Acceso privado y operaciones CRUD |
+| `src/search.ts` | Normalización y búsqueda tolerante a errores |
+| `src/lib_supabase.ts` | Inicialización del cliente Supabase |
+| `src/styles.css` | Diseño visual, responsive y estados |
+| `src/main.tsx` | Selección de ruta pública/admin y metadatos noindex del admin |
+| `index.html` | Metadatos, canonical, Open Graph y JSON-LD |
+| `public/robots.txt` | Instrucciones de rastreo |
+| `public/sitemap.xml` | URL canónica pública |
+| `supabase/migrations/` | Historial de esquema y políticas |
+| `supabase/seed/` | Importación histórica de productos |
 
-### PANEL ADMINISTRATIVO (`src/AdminApp.tsx`)
-- Autenticación con Supabase Auth (email/password)
-- Gestión de productos: crear, editar, eliminar, cambiar estado/categoría, editar 8 precios
-- Gestión de categorías: crear, renombrar, eliminar (sin productos asociados)
-- Gestión de combos: crear, editar, eliminar, productos con cantidades, precios por tarifa, fechas
-- Gestión de provincias/municipios: crear, activar/desactivar
-- Subida de imágenes de producto y combo
-- Mensajes de éxito/error en la interfaz
+`src/data.ts` conserva datos de muestra históricos; el catálogo en producción se obtiene de Supabase.
 
-## 4. Base de Datos (`supabase/0001_initial_schema.sql`)
+## 4. Modelo funcional existente
 
-Tablas: categories, products, product_images, pricing_options (8 tarifas iniciales), product_prices, combos, combo_images, combo_items, combo_prices, provinces, municipalities, admin_users
-Vistas: product_catalog, combo_catalog
+La aplicación usa las tablas existentes para categorías, productos, imágenes, opciones de precio, precios por producto, combos, imágenes y composición de combos, provincias, municipios y usuarios administradores. Las migraciones SQL incluidas son documentación y código de evolución del esquema; su presencia en el ZIP no significa que deban volver a ejecutarse en producción.
 
-## 5. Problemas Detectados
+## 5. Controles implementados en esta entrega
 
-### Base de datos y seguridad
-1. **`0002_security_hardening.sql` incompleto**: Solo tiene políticas RLS para categories, products y product_images. Faltan políticas para: pricing_options, product_prices, combos, combo_images, combo_items, combo_prices, provinces, municipalities, admin_users
-2. **`0003_product_image_storage.sql` no existe**: Referenciado en README pero no implementado (bucket Storage, políticas de Storage)
-3. **`0004_import_47_products.sql` no existe**: Referenciado en README pero no implementado (datos iniciales de los 47 productos)
-4. **Falta función `is_admin()`**: Función SECURITY DEFINER no implementada
-5. **No hay migración para Santiago de Cuba**: Los 9 municipios iniciales no están en las migraciones
+- Precio subtotal visible junto al carrito y recalculado al cambiar de tarifa.
+- Protección de posición de desplazamiento al añadir un artículo.
+- Filtro de visibilidad por estado y precio de la tarifa seleccionada.
+- Validación local de carnet y teléfono móvil cubano del destinatario.
+- Búsqueda tolerante a acentos, mayúsculas, errores pequeños y transposición.
+- Selector compacto y buscable de productos para combos.
+- Validación de formatos numéricos en precios y cantidades administrativas.
+- Control de visibilidad de contraseña en el acceso administrativo.
+- Tarjetas con estructura visual consistente y ajustes mobile-first.
+- Footer con atribución y copyright.
+- Metadatos SEO, robots, sitemap y noindex administrativo.
 
-### Código fuente
-1. **`src/data.ts` usa datos demo**: Solo 6 productos estáticos, no conectados al catálogo real de Supabase
-2. **`src/App.tsx` sin validación de permisos de administrador**
-3. **`src/AdminApp.tsx` sin verificación completa de admin_users antes de mostrar contenido**
+## 6. Límites conocidos de esta versión
 
-### Documentación
-1. **README.md desactualizado**: Referencia migraciones que no existen (0003, 0004)
-2. **Falta `.env.local`**: No existe archivo de entorno para desarrollo local
-3. **Falta `.gitignore`**: No existe para excluir node_modules, dist, .env, secretos
+- Es una SPA: no tiene URLs individuales para cada producto o categoría. El sitemap contiene solo la página principal.
+- Los datos estructurados describen la tienda y el sitio, no inventan ofertas o precios de productos.
+- El formato de teléfono destinatario se valida como móvil cubano de ocho dígitos iniciado en 5 o 63. Si la propietaria desea aceptar también teléfonos fijos, habrá que ampliar la regla.
+- La validación del carnet comprueba longitud y fecha inicial, pero no pretende verificar la autenticidad del documento ni su dígito de control.
+- La experiencia debe terminar de probarse en dispositivos reales y con el proyecto Supabase de producción; el ZIP no contiene credenciales ni permite validar datos privados.
 
-## 6. Archivos Incompletos o Sin Uso Aparente
+## 7. Seguridad y precauciones
 
-- `supabase/0002_security_hardening.sql`: Solo parcialmente implementado (políticas RLS incompletas)
-- `src/data.ts`: Solo datos de demostración (6 productos), no usa el catálogo dinámico
-
-## 7. Archivos Faltantes Requeridos
-
-| Archivo | Propósito |
-|---------|-----------|
-| `.gitignore` | Excluir node_modules, dist, .env, secretos |
-| `supabase/0003_product_image_storage.sql` | Configuración del bucket Storage y políticas |
-| `supabase/0004_import_47_products.sql` | Importación de los 47 productos iniciales |
+- No incluir `.env.local`, claves `service_role` ni secretos en el ZIP o Git.
+- Mantener RLS y políticas existentes.
+- No ejecutar migraciones iniciales ni seed contra la base de datos ya poblada.
+- Las validaciones del navegador mejoran la experiencia, pero no sustituyen controles de seguridad en servidor.
