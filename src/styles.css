@@ -280,3 +280,39 @@ button,input,select,textarea{font:inherit}
 .sort-filter select{max-width:210px;border:1px solid #e1dfd6;border-radius:8px;background:#fff;padding:8px 10px;color:#263449;font:600 11px 'DM Sans',sans-serif}
 .result-count{margin-left:auto;color:#87909c;font-size:10px}
 @media(max-width:560px){.catalog-tools{gap:11px;padding:11px}.sort-filter{flex:1;justify-content:flex-end}.sort-filter select{max-width:155px}.result-count{width:100%;margin:0;text-align:right}}
+
+/* Delivery zones: responsive, touch-friendly management */
+.admin-modal .zone-list{display:flex;flex-direction:column;gap:14px;max-height:46vh;overflow-x:hidden;overflow-y:auto;padding:2px 4px 8px 2px;}
+.admin-modal .zone-block{min-width:0;width:100%;padding:14px;border:1px solid #e7e8ec;border-radius:14px;background:#fff;}
+.admin-modal .zone-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;min-width:0;padding-bottom:12px;border-bottom:1px solid #edf0f3;}
+.admin-modal .zone-heading>b{font-size:15px;line-height:1.35;overflow-wrap:anywhere;}
+.admin-modal .zone-province-actions,.admin-modal .municipality-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.admin-modal .zone-province-actions .toggle-label{font-size:13px!important;white-space:nowrap;}
+.admin-modal .zone-icon-button{width:42px;min-width:42px;height:42px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:11px;}
+.admin-modal .municipality-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;margin-top:12px;}
+.admin-modal .municipality-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:7px 0;border-bottom:1px solid #f0f1f3;}
+.admin-modal .municipality-name{display:flex!important;align-items:center!important;gap:9px!important;flex:1;min-width:0;margin:0!important;font-size:13px!important;font-weight:500!important;color:#465366!important;}
+.admin-modal .municipality-name input{flex:0 0 auto;width:19px!important;height:19px!important;margin:0!important;}
+.admin-modal .municipality-name span{min-width:0;overflow-wrap:anywhere;line-height:1.35;}
+.admin-modal .municipality-actions{flex:0 0 auto;gap:6px;}
+.admin-modal .zone-edit-form{display:flex;align-items:center;gap:7px;flex:1 1 260px;min-width:0;margin:0;}
+.admin-modal .zone-edit-form input{flex:1;min-width:80px;width:100%;border:1px solid #d9dee5;border-radius:10px;padding:11px 12px;font:inherit;}
+.admin-modal .zone-edit-form button{min-height:40px;white-space:nowrap;}
+.admin-modal .zone-cancel{border:1px solid #d9dee5;background:#fff;color:#445066;border-radius:10px;padding:9px 11px;}
+.admin-modal .municipality-edit-form{flex-basis:100%;}
+.admin-modal .inline-admin-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;gap:10px;}
+.admin-modal .inline-admin-form input,.admin-modal .inline-admin-form select{width:100%;min-width:0;min-height:48px;font-size:14px;}
+.admin-modal .inline-admin-form button{min-height:48px;padding-inline:18px;white-space:nowrap;}
+@media(max-width:600px){
+  .admin-modal .zone-list{max-height:43vh;}
+  .admin-modal .zone-block{padding:12px;}
+  .admin-modal .zone-heading{align-items:flex-start;}
+  .admin-modal .zone-province-actions{width:100%;justify-content:flex-start;}
+  .admin-modal .municipality-list{grid-template-columns:minmax(0,1fr);gap:2px;}
+  .admin-modal .municipality-row{min-height:54px;}
+  .admin-modal .inline-admin-form{grid-template-columns:minmax(0,1fr);}
+  .admin-modal .inline-admin-form button{width:100%;}
+  .admin-modal .zone-edit-form{flex-wrap:wrap;}
+  .admin-modal .zone-edit-form input{flex-basis:100%;}
+  .admin-modal .zone-edit-form button{flex:1;}
+}

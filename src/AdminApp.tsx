@@ -55,6 +55,8 @@ export default function AdminApp() {
   const [newCategory,setNewCategory] = useState(''); const [editingCategory,setEditingCategory] = useState<string|null>(null); const [editingCategoryName,setEditingCategoryName] = useState('')
   const [newProvince,setNewProvince] = useState(''); const [newMunicipality,setNewMunicipality] = useState(''); const [selectedProvince,setSelectedProvince] = useState('')
   const [showZonesModal,setShowZonesModal] = useState(false)
+  const [editingProvince,setEditingProvince] = useState<string|null>(null); const [editingProvinceName,setEditingProvinceName] = useState('')
+  const [editingMunicipality,setEditingMunicipality] = useState<string|null>(null); const [editingMunicipalityName,setEditingMunicipalityName] = useState('')
 
   // Modal states
   const [showProductModal,setShowProductModal] = useState(false)
@@ -443,26 +445,30 @@ export default function AdminApp() {
     setBusy(false)
   }
 
-  async function renameProvince(province:Province) {
+  async function saveProvinceName(province:Province) {
     if (!supabase) return
-    const nextName=window.prompt('Nuevo nombre de la provincia:',province.name)?.trim()
-    if(!nextName || nextName===province.name) return
+    const nextName=editingProvinceName.trim()
+    if (!nextName) { setError('Escribe un nombre para la provincia.'); return }
+    if (nextName===province.name) { setEditingProvince(null); return }
+    if (provinces.some(p=>p.id!==province.id && slugify(p.name)===slugify(nextName))) { setError('Ya existe una provincia con ese nombre.'); return }
     setBusy(true); setError('')
     const {error:updateError}=await supabase.from('provinces').update({name:nextName,slug:slugify(nextName)}).eq('id',province.id)
     if(updateError)setError(updateError.message)
-    else {setNotice('Provincia actualizada.'); await refresh()}
+    else {setNotice('Provincia actualizada.'); setEditingProvince(null); await refresh()}
     setBusy(false)
   }
 
-  async function renameMunicipality(municipality:Municipality) {
+  async function saveMunicipalityName(municipality:Municipality) {
     if (!supabase) return
-    const nextName=window.prompt('Nuevo nombre del municipio:',municipality.name)?.trim()
-    if(!nextName || nextName===municipality.name) return
+    const nextName=editingMunicipalityName.trim()
+    if (!nextName) { setError('Escribe un nombre para el municipio.'); return }
+    if (nextName===municipality.name) { setEditingMunicipality(null); return }
+    if (municipalities.some(m=>m.id!==municipality.id && m.province_id===municipality.province_id && slugify(m.name)===slugify(nextName))) { setError('Ya existe ese municipio en la provincia.'); return }
     const provinceName=provinces.find(p=>p.id===municipality.province_id)?.name||'zona'
     setBusy(true); setError('')
     const {error:updateError}=await supabase.from('municipalities').update({name:nextName,slug:`${slugify(provinceName)}-${slugify(nextName)}`}).eq('id',municipality.id)
     if(updateError)setError(updateError.message)
-    else {setNotice('Municipio actualizado.'); await refresh()}
+    else {setNotice('Municipio actualizado.'); setEditingMunicipality(null); await refresh()}
     setBusy(false)
   }
 
@@ -539,7 +545,7 @@ export default function AdminApp() {
     <section className="admin-card" id="category-editor"><div className="admin-section-title"><div><h2><Tags size={19}/> Categorías</h2><p>{categories.length} categorías registradas</p></div><button type="button" className="refresh" onClick={()=>setShowCategoryModal(true)}><Plus size={14}/> Gestionar categorías</button></div>{showCategoryModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowCategoryModal(false)}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>Gestionar categorías</h3><button type="button" className="danger-button" onClick={()=>setShowCategoryModal(false)}><X size={18}/></button></div><p>Añade, edita o elimina categorías.</p><form className="inline-admin-form" onSubmit={addCategory}><input value={newCategory} onChange={e=>setNewCategory(e.target.value)} placeholder="Nueva categoría" required/><button className="refresh" disabled={busy}>Añadir</button></form><div className="admin-category-list">{categories.map(c=><div className="admin-category-row" key={c.id}>{editingCategory===c.id ? <><input value={editingCategoryName} onChange={e=>setEditingCategoryName(e.target.value)}/><button className="refresh" onClick={()=>saveCategoryEdit(c)} disabled={busy}>Guardar</button><button className="refresh" onClick={()=>setEditingCategory(null)}>Cancelar</button></> : <><b>{c.name}</b><div className="row-actions"><button className="refresh" onClick={()=>{setEditingCategory(c.id);setEditingCategoryName(c.name)}}><Pencil size={14}/> Editar</button><button className="danger-button" onClick={()=>deleteCategory(c)} aria-label={`Eliminar ${c.name}`}><Trash2 size={15}/></button></div></>}</div>)}</div></section></div>}</section>
     <section className="admin-card" id="delivery-zones"><div className="admin-section-title"><div><h2><MapPin size={19}/> Zonas de entrega</h2><p>Gestiona provincias y municipios.</p></div><button type="button" className="refresh" onClick={()=>setShowZonesModal(true)}><Plus size={14}/> Gestionar zonas</button></div>{showZonesModal && <div className="admin-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowZonesModal(false)}}><section className="admin-modal" role="dialog" aria-modal="true"><div className="admin-modal-heading"><h3>Zonas de entrega</h3><button type="button" className="danger-button" onClick={()=>setShowZonesModal(false)}><X size={18}/></button></div><p>Inicialmente Santiago de Cuba y sus municipios. Las provincias nuevas se crean deshabilitadas hasta que la propietaria decida ofrecer entregas allí.</p>
       <form className="inline-admin-form" onSubmit={addProvince}><input value={newProvince} onChange={e=>setNewProvince(e.target.value)} placeholder="Añadir provincia" required/><button className="refresh" disabled={busy}>Añadir provincia</button></form>
-      <div className="zone-list">{provinces.map(p=><div className="zone-block" key={p.id}><div className="zone-heading"><b>{p.name}</b><div className="row-actions"><label className="toggle-label"><input type="checkbox" checked={p.is_enabled} onChange={()=>toggleProvince(p)}/> Habilitada</label><button type="button" className="refresh" onClick={()=>renameProvince(p)} aria-label={`Editar provincia ${p.name}`}><Pencil size={14}/></button><button type="button" className="danger-button" onClick={()=>deleteProvince(p)} aria-label={`Eliminar provincia ${p.name}`}><Trash2 size={14}/></button></div></div><div className="municipality-list">{municipalities.filter(m=>m.province_id===p.id).map(m=><div className="municipality-row" key={m.id}><label><input type="checkbox" checked={m.is_enabled} onChange={()=>toggleMunicipality(m)}/>{m.name}</label><button type="button" className="refresh" onClick={()=>renameMunicipality(m)} aria-label={`Editar municipio ${m.name}`}><Pencil size={13}/></button><button type="button" className="danger-button" onClick={()=>deleteMunicipality(m)} aria-label={`Eliminar municipio ${m.name}`}><Trash2 size={13}/></button></div>)}</div></div>)}</div>
+      <div className="zone-list">{provinces.map(p=><article className="zone-block" key={p.id}><div className="zone-heading">{editingProvince===p.id ? <form className="zone-edit-form" onSubmit={e=>{e.preventDefault();void saveProvinceName(p)}}><input aria-label="Nombre de provincia" value={editingProvinceName} onChange={e=>setEditingProvinceName(e.target.value)} autoFocus/><button className="refresh" disabled={busy}>Guardar</button><button type="button" className="zone-cancel" onClick={()=>setEditingProvince(null)}>Cancelar</button></form> : <b>{p.name}</b>}<div className="zone-province-actions"><label className="toggle-label"><input type="checkbox" checked={p.is_enabled} onChange={()=>toggleProvince(p)}/> Habilitada</label><button type="button" className="refresh zone-icon-button" onClick={()=>{setEditingProvince(p.id);setEditingProvinceName(p.name);setEditingMunicipality(null)}} aria-label={`Editar provincia ${p.name}`}><Pencil size={15}/></button><button type="button" className="danger-button zone-icon-button" onClick={()=>deleteProvince(p)} aria-label={`Eliminar provincia ${p.name}`}><Trash2 size={15}/></button></div></div><div className="municipality-list">{municipalities.filter(m=>m.province_id===p.id).map(m=><div className="municipality-row" key={m.id}>{editingMunicipality===m.id ? <form className="zone-edit-form municipality-edit-form" onSubmit={e=>{e.preventDefault();void saveMunicipalityName(m)}}><input aria-label="Nombre de municipio" value={editingMunicipalityName} onChange={e=>setEditingMunicipalityName(e.target.value)} autoFocus/><button className="refresh" disabled={busy}>Guardar</button><button type="button" className="zone-cancel" onClick={()=>setEditingMunicipality(null)}>Cancelar</button></form> : <label className="municipality-name"><input type="checkbox" checked={m.is_enabled} onChange={()=>toggleMunicipality(m)}/><span>{m.name}</span></label>}{editingMunicipality!==m.id && <div className="municipality-actions"><button type="button" className="refresh zone-icon-button" onClick={()=>{setEditingMunicipality(m.id);setEditingMunicipalityName(m.name);setEditingProvince(null)}} aria-label={`Editar municipio ${m.name}`}><Pencil size={14}/></button><button type="button" className="danger-button zone-icon-button" onClick={()=>deleteMunicipality(m)} aria-label={`Eliminar municipio ${m.name}`}><Trash2 size={14}/></button></div>}</div>)}</div></article>)}</div>
       <form className="inline-admin-form" onSubmit={addMunicipality}><select value={selectedProvince} onChange={e=>setSelectedProvince(e.target.value)}><option value="">Provincia</option>{provinces.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><input value={newMunicipality} onChange={e=>setNewMunicipality(e.target.value)} placeholder="Nuevo municipio" required/><button className="refresh" disabled={busy}>Añadir municipio</button></form></section></div>}
     </section>
     <section className="admin-card"><h2>Buenas prácticas</h2><p>Los productos agotados pueden seguir visibles, pero no deben poder añadirse al carrito. Los ocultos no aparecen en el catálogo público. Los precios vacíos se muestran como pendientes y no se convierten automáticamente. Mantén la cuenta propietaria privada y no habilites el registro público.</p></section>
