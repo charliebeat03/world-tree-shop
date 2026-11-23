@@ -44,3 +44,18 @@
 ## Cambios anteriores
 
 Se mantienen las mejoras previas del panel de administración, la gestión de imágenes WebP, la verificación de referencias en Supabase Storage, los combos y las modalidades de precio Guyana y Western Union. Consulta el historial de Git para ver los cambios anteriores a esta entrega.
+
+## Corrección de sesión administrativa
+
+- La comprobación de pertenencia a `admin_users` ya no cierra la sesión cuando falla temporalmente por red, timeout o error de consulta.
+- Se realizan hasta tres intentos breves de verificación.
+- Si la verificación sigue fallando, se conserva la sesión de Supabase y se muestra un mensaje de conexión, en lugar de afirmar que la cuenta no está autorizada.
+- El cierre de sesión de la interfaz se sincroniza con el evento explícito `SIGNED_OUT`.
+- Una cuenta que se comprueba correctamente como inexistente o inactiva sigue sin poder acceder y se cierra su sesión.
+
+
+## 2026-11-22 · Refinamiento adicional de catálogo
+- Se confirma que esta entrega conserva las mejoras UX/UI del ZIP anterior: subtotal en el carrito, preservación del scroll al añadir, exclusión de productos sin precio, estados de agotado, búsqueda tolerante, tarjetas consistentes, validaciones de pedido, editor de combos, visibilidad de contraseña en administración, mejoras móviles y SEO básico.
+- Se integra el ajuste de sesión administrativa: reintentos al comprobar permisos y no cerrar sesión ante fallos transitorios de red/consulta.
+- Nuevo filtro «Solo disponibles», selector de orden (recomendados, nombre A-Z y precio ascendente/descendente) y contador de resultados para productos y combos.
+- La galería GoodCart se utilizó como referencia de patrones ecommerce reales: filtros/ordenación, navegación de catálogo y acciones rápidas. No se copiaron diseños ni recursos de marcas.

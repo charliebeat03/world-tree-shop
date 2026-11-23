@@ -104,3 +104,11 @@ Este repositorio contiene migraciones históricas en `supabase/migrations/`, cop
 - `index.html`: metadatos SEO y datos estructurados.
 - `public/robots.txt` y `public/sitemap.xml`: rastreo e indexación.
 - `supabase/migrations/`: migraciones SQL existentes.
+
+### Sesión del panel administrativo
+
+El panel consulta `admin_users` para comprobar que el usuario autenticado esté activo. Los errores temporales de red o consulta no se interpretan como falta de autorización: se reintenta la comprobación y, si continúa fallando, se conserva la sesión para evitar expulsiones falsas. Una cuenta sin registro activo sigue siendo rechazada.
+
+
+### Mejoras recientes de experiencia de compra
+El catálogo permite filtrar artículos disponibles, ordenar por nombre o precio y ver el número de resultados. Los botones de añadir al carrito siguen disponibles directamente desde cada tarjeta. La interfaz toma como referencia patrones de ecommerce observados en GoodCart, adaptados a una tienda de catálogo con pedidos coordinados por WhatsApp y sin checkout/pago integrado.
