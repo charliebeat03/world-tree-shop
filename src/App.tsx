@@ -42,6 +42,8 @@ export default function App(){
  const [loadError,setLoadError]=useState('')
  const [category,setCategory]=useState('Todos')
  const [query,setQuery]=useState('')
+ const [onlyAvailable,setOnlyAvailable]=useState(false)
+ const [sortOrder,setSortOrder]=useState<'featured'|'name'|'price_asc'|'price_desc'>('featured')
  const [cart,setCart]=useState<CartLine[]>([])
  const [showCart,setShowCart]=useState(false)
  const [buyer,setBuyer]=useState({name:'',phone:'',recipient:'',idCard:'',recipientPhone:'',municipality:'',address:'',notes:''})
@@ -105,15 +107,27 @@ export default function App(){
  const visibleProducts=useMemo(()=>products.filter(p=>
    (p.status==='available'||p.status==='sold_out') &&
    productPrice(p)!==undefined &&
+   (!onlyAvailable||p.status==='available') &&
    (category==='Todos'||p.categories?.name===category)&&
    matchesSearch(normalizedQuery,[p.name,p.description,p.categories?.name])
- ),[products,category,normalizedQuery,tariff])
+ ).sort((a,b)=>{
+   if(sortOrder==='name')return a.name.localeCompare(b.name,'es',{sensitivity:'base'})
+   if(sortOrder==='price_asc')return (productPrice(a)??Infinity)-(productPrice(b)??Infinity)
+   if(sortOrder==='price_desc')return (productPrice(b)??-Infinity)-(productPrice(a)??-Infinity)
+   return 0
+ }),[products,category,normalizedQuery,tariff,onlyAvailable,sortOrder])
  // En la pestaña de combos, buscar también los productos que contiene cada combo.
  const visibleCombos=useMemo(()=>combos.filter(c=>
    (c.status==='available'||c.status==='sold_out') &&
    comboPrice(c)!==undefined &&
+   (!onlyAvailable||c.status==='available') &&
    matchesSearch(normalizedQuery,[c.name,c.description,...c.combo_items.flatMap(item=>[item.products?.name,item.products?.description])])
- ),[combos,normalizedQuery,tariff])
+ ).sort((a,b)=>{
+   if(sortOrder==='name')return a.name.localeCompare(b.name,'es',{sensitivity:'base'})
+   if(sortOrder==='price_asc')return (comboPrice(a)??Infinity)-(comboPrice(b)??Infinity)
+   if(sortOrder==='price_desc')return (comboPrice(b)??-Infinity)-(comboPrice(a)??-Infinity)
+   return 0
+ }),[combos,normalizedQuery,tariff,onlyAvailable,sortOrder])
  const imageUrl=(path:string)=>/^https?:\/\//i.test(path)?path:(supabase?.storage.from('world-tree-products').getPublicUrl(path).data.publicUrl||'')
  const currentCart=cart.map(line=>{
   const source=line.kind==='product'?products.find(product=>product.id===line.id):combos.find(combo=>combo.id===line.id)
@@ -145,6 +159,11 @@ const addLine=(line:CartLine)=>{if(line.status!=='available'||line.price===undef
    <section id="catalog" className="catalog"><div className="section-heading"><div><span className="eyebrow">CATÁLOGO</span><h2>Encuentra tus favoritos</h2><p>La disponibilidad y el importe final se confirman al coordinar el pedido.</p></div><label className="search-box"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar productos…"/></label></div>
     <div className="category-row">{['Todos',...categories.map(c=>c.name)].map(c=><button key={c} onClick={()=>setCategory(c)} className={category===c?'category active':'category'}>{c}</button>)}</div>
     <div className="category-row"><button className={catalogMode==='products'?'category active':'category'} onClick={()=>setCatalogMode('products')}>Productos</button><button className={catalogMode==='combos'?'category active':'category'} onClick={()=>setCatalogMode('combos')}>Combos y promociones</button></div>
+    <div className="catalog-tools" aria-label="Filtros y orden del catálogo">
+     <label className="available-filter"><input type="checkbox" checked={onlyAvailable} onChange={e=>setOnlyAvailable(e.target.checked)}/> Solo disponibles</label>
+     <label className="sort-filter"><span>Ordenar:</span><select value={sortOrder} onChange={e=>setSortOrder(e.target.value as typeof sortOrder)}><option value="featured">Recomendados</option><option value="name">Nombre: A-Z</option><option value="price_asc">Precio: menor a mayor</option><option value="price_desc">Precio: mayor a menor</option></select></label>
+     <span className="result-count">{catalogMode==='products'?visibleProducts.length:visibleCombos.length} {catalogMode==='products'?'productos':'combos'}</span>
+    </div>
     {loading?<div className="empty"><RefreshCw size={18}/> Cargando catálogo…</div>:loadError?<div className="empty">{loadError}</div>:catalogMode==='products'?<div className="product-grid">{visibleProducts.map(p=><ProductCard key={p.id} p={p}/>)}</div>:<div className="product-grid">{visibleCombos.map(c=><ComboCard key={c.id} c={c}/>)}</div>}
     {!loading&&!loadError&&catalogMode==='products'&&!visibleProducts.length&&<div className="empty">{normalizedQuery?'No encontramos productos con ese término. Prueba otra palabra.':'Todavía no hay productos publicados en esta categoría.'}</div>}
     {!loading&&!loadError&&catalogMode==='combos'&&!visibleCombos.length&&<div className="empty">{normalizedQuery?'No encontramos combos o productos con ese término. Prueba otra palabra.':'Próximamente publicaremos combos y promociones.'}</div>}

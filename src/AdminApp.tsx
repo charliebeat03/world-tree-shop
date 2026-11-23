@@ -87,14 +87,30 @@ export default function AdminApp() {
 
   const checkAdmin = useCallback(async (userId:string) => {
     if (!supabase) return false
-    const {data,error:checkError} = await supabase.from('admin_users').select('user_id').eq('user_id',userId).eq('is_active',true).maybeSingle()
-    if (checkError || !data) {
+    // A temporary network/RLS error must never be treated as proof that the
+    // account is unauthorized. Retry briefly, then preserve the auth session.
+    let data: { user_id:string } | null = null
+    let checkError: { message:string } | null = null
+    for (let attempt=0; attempt<3; attempt++) {
+      const result = await supabase.from('admin_users').select('user_id').eq('user_id',userId).eq('is_active',true).maybeSingle()
+      data = result.data
+      checkError = result.error
+      if (!checkError) break
+      if (attempt<2) await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))
+    }
+    if (checkError) {
+      setAuthorized(false)
+      setError('No se pudo comprobar tu autorización por un problema de conexión. Tu sesión se ha conservado. Comprueba la conexión y vuelve a intentarlo.')
+      return false
+    }
+    if (!data) {
       await supabase.auth.signOut()
       setAuthorized(false)
       setError('Esta cuenta no está autorizada para administrar World Tree.')
       return false
     }
     setAuthorized(true)
+    setError('')
     await refresh()
     return true
   }, [refresh])
@@ -102,11 +118,16 @@ export default function AdminApp() {
   useEffect(() => {
     if (!supabase) return
     let alive = true
-    supabase.auth.getSession().then(async ({data}) => {
-      if (alive && data.session) await checkAdmin(data.session.user.id)
+    const {data:listener} = supabase.auth.onAuthStateChange((event,next) => {
+      if (event === 'SIGNED_OUT' || (!next && event !== 'INITIAL_SESSION')) {
+        setAuthorized(false)
+        setProducts([])
+      }
     })
-    const {data:listener} = supabase.auth.onAuthStateChange((_event,next) => {
-      if (!next) { setAuthorized(false); setProducts([]) }
+    supabase.auth.getSession().then(async ({data,error:sessionError}) => {
+      if (!alive) return
+      if (sessionError) { setError('No se pudo recuperar la sesión. Comprueba tu conexión e inténtalo de nuevo.'); return }
+      if (data.session) await checkAdmin(data.session.user.id)
     })
     return () => { alive=false; listener.subscription.unsubscribe() }
   }, [checkAdmin])

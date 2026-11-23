@@ -270,3 +270,13 @@ button,input,select,textarea{font:inherit}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* Catálogo: filtros rápidos y ordenación, inspirados en patrones ecommerce de GoodCart. */
+.catalog-tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:-10px 0 20px;padding:12px 14px;border:1px solid #eae8e0;border-radius:12px;background:#fff}
+.available-filter{display:flex;align-items:center;gap:8px;color:#344054;font-size:12px;font-weight:600;cursor:pointer}
+.available-filter input{width:16px;height:16px;accent-color:#10203c}
+.sort-filter{display:flex;align-items:center;gap:8px;color:#667085;font-size:11px}
+.sort-filter select{max-width:210px;border:1px solid #e1dfd6;border-radius:8px;background:#fff;padding:8px 10px;color:#263449;font:600 11px 'DM Sans',sans-serif}
+.result-count{margin-left:auto;color:#87909c;font-size:10px}
+@media(max-width:560px){.catalog-tools{gap:11px;padding:11px}.sort-filter{flex:1;justify-content:flex-end}.sort-filter select{max-width:155px}.result-count{width:100%;margin:0;text-align:right}}
